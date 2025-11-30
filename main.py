@@ -4,8 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Configuration load karna
 from app.core.config import settings 
 # Routers import karna
-from app.routers import auth, admin
-from app.routers import auth, admin, dbt # New router import
+from app.routers import auth, admin, dbt
 # --- D. FastAPI Setup ---
 # Title ko project ke hisaab se update kiya gaya hai
 app = FastAPI(

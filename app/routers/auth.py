@@ -1,7 +1,7 @@
 # app/routers/auth.py
 from fastapi import APIRouter, HTTPException, status, Depends
 from datetime import timedelta
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from app.core.config import settings
 from app.core.security import create_access_token, execute_login_query, verify_jwt_token

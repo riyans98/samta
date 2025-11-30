@@ -4,6 +4,7 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, Header, Depends, status
 from typing import Optional, Dict, Any
+from mysql.connector import Error
 
 from app.core.config import settings
 from app.db.session import get_db_connection

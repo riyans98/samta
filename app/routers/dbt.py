@@ -197,7 +197,9 @@ async def submit_fir_form(
         caste_cert_name = save_uploaded_file(casteCertificate, f"{file_prefix}_CASTE")
         
         # DB Field: Medical_Report_Image
-        medical_report_name = save_uploaded_file(medicalCertificate, f"{file_prefix}_MEDICAL")
+        medical_report_name = ""
+        if medicalCertificate:
+            medical_report_name = save_uploaded_file(medicalCertificate, f"{file_prefix}_MEDICAL")
         
     except HTTPException:
         # Re-raise file upload errors
