@@ -1,13 +1,22 @@
 # app/schemas/auth_schemas.py
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Literal, Optional
 
 # Base Model
+
+
+RolesType = Literal[
+    "State Nodal Officer",
+    "Tribal Officer",
+    "District Collector/DM/SJO",
+    "Investigation Officer"
+]
+
 class BaseOfficer(BaseModel):
     """Base model for data insertion."""
     login_id: str = Field(..., max_length=255)
     password: str = Field(..., max_length=255)
-    role: str = Field(..., max_length=50)
+    role: RolesType = Field(..., max_length=50)
     state_ut: str = Field(..., max_length=100)
 
 class StateNodalOfficer(BaseOfficer):
@@ -26,10 +35,18 @@ class VisheshThanaOfficer(DistrictLvlOfficer):
 class LoginCredentials(BaseModel):
     login_id: str
     password: str
-    role: str
+    role: RolesType
 
 # Model for JWT Response
 class Token(BaseModel):
     access_token: str
-    token_type: str = "bearer"
-    role: str
+
+class Officer(BaseModel):
+    login_id: str
+    role: RolesType
+    state_ut: str
+    district: Optional[str] = None
+    vishesh_p_s_name: Optional[str] = None
+
+class OfficerResponse(Officer, Token):
+    pass

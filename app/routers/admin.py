@@ -40,4 +40,5 @@ async def create_vishesh_thana_officer(
     # Pydantic ke .dict(by_alias=True) ki jagah, hum officer.model_dump() use kar rahe hain, jo pydantic v2 ka standard hai. 
     # Agar model me koi alias hota toh use karna padta, but yahan direct field names hain.
     hashed_pass = hash_password(officer.password)
+    officer.role = "Investigation Officer"
     return execute_insert("Vishesh_Thana_Officers", officer.model_dump(exclude_none=True), hashed_pass)

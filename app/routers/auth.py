@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional
 
 from app.core.config import settings
 from app.core.security import create_access_token, execute_login_query, verify_jwt_token
-from app.schemas.auth_schemas import LoginCredentials, Token
+from app.schemas.auth_schemas import LoginCredentials, Token, Officer, OfficerResponse, RolesType
 
 # Router object banane se hum is file ko main app se alag kar sakte hain
 router = APIRouter(
@@ -13,16 +13,16 @@ router = APIRouter(
     tags=["Authentication"],
 )
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=OfficerResponse)
 async def login_user(credentials: LoginCredentials):
     """Authenticates a user and issues a JWT access token."""
     
     # Is mapping ko security.py se yahan move kiya gaya hai taaki business logic (roles) router mein rahe
-    role_to_table = {
+    role_to_table: Dict[RolesType, str] = {
         "State Nodal Officer": "State_Nodal_Officers",
         "Tribal Officer": "District_lvl_Officers",
         "District Collector/DM/SJO": "District_lvl_Officers",
-        "Vishesh Thana Officer": "Vishesh_Thana_Officers"
+        "Investigation Officer": "Vishesh_Thana_Officers"
     }
     
     table_name = role_to_table.get(credentials.role)
@@ -46,13 +46,11 @@ async def login_user(credentials: LoginCredentials):
             token_payload,
             expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         )
+
+        user_info['access_token'] = access_token
         
         # Return the access token and the token type
-        return {
-            "access_token": access_token, 
-            "token_type": "bearer",
-            "role": user_info['role']
-        }
+        return user_info
     else:
         # Return 401 Unauthorized for failed authentication
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Login ID or Password for the selected role.")
