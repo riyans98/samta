@@ -98,3 +98,4 @@ def execute_insert(table_name: str, data: Dict[str, Any], hashed_password: str):
 
 # execute_login_query ko auth_service.py/security.py mein move karna behtar hai 
 # kyunki usme bcrypt aur password logic hai, jo ki DB se zyada security/business logic hai.
+

@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Configuration load karna
 from app.core.config import settings 
 # Routers import karna
-from app.routers import auth, admin, dbt
+from app.routers import auth, admin, dbt, test
 # --- D. FastAPI Setup ---
 # Title ko project ke hisaab se update kiya gaya hai
 app = FastAPI(
@@ -31,6 +31,7 @@ app.include_router(auth.router, tags=["Authentication"])
 app.include_router(admin.router, tags=["Admin"])
 # New DBT Router for case submission
 app.include_router(dbt.router) # Prefix defined in dbt.py
+app.include_router(test.test_router)
 
 @app.get("/", tags=["Root"])
 def read_root():

@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     DBT_DB_USER: str
     DBT_DB_PASSWORD: str
     DBT_DB_DATABASE: str
+
+    # Govt DB
+    GOVT_DB_DATABASE: str
     
     # File Upload Directory
     UPLOAD_DIR: str = "uploaded_files"
