@@ -1,18 +1,18 @@
 # app/schemas/dbt_schemas.py
 from pydantic import BaseModel, Field, conint, EmailStr, validator
 from typing import Optional, Literal
-from datetime import date
+from datetime import date, datetime
 
 # Note: File uploads ke liye hum FastAPI ke UploadFile use karenge, models mein nahi.
 
 class AtrocityBase(BaseModel):
     # --- FIR Details (Partial) ---
-    FIR_NO: conint(ge=1) # FIR_NO is NOT NULL
+    FIR_NO: str # FIR_NO is NOT NULL
     Case_Description: str = Field(..., max_length=500, description="Incident Description from form")
 
     # --- Victim Details ---
     Victim_Name: str = Field(..., max_length=150)
-    Father_Name: str = Field(..., max_length=150, alias="relation", description="Assuming 'relation' maps to Father_Name/Husband_Name in DB")
+    Father_Name: str = Field(..., max_length=150, description="Assuming 'relation' maps to Father_Name/Husband_Name in DB")
     Victim_DOB: date # Yahan date object aayega
     Gender: Literal["male", "female", "other"]
     Victim_Mobile_No: str = Field(..., max_length=15, min_length=10)
@@ -23,6 +23,7 @@ class AtrocityBase(BaseModel):
     Bank_Account_No: str = Field(..., max_length=20)
     IFSC_Code: Optional[str] = Field(None, max_length=20)
     Holder_Name: Optional[str] = Field(None, max_length=100)
+    Bank_Name: str = Field(..., max_length=100)
     
     # --- Other DB required fields (Initial State) ---
     Stage: conint(ge=0, le=10) = 0
@@ -37,6 +38,7 @@ class AtrocityBase(BaseModel):
     Applied_Acts: Optional[str] = Field(None, max_length=500)
     Location: Optional[str] = Field(None, max_length=200)
     Date_of_Incident: Optional[date] = None
+
 
     class Config:
         # Allows accessing fields by their alias (e.g., 'relation' in input maps to 'Father_Name' in model)

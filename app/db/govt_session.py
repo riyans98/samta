@@ -32,16 +32,13 @@ def get_govt_db_connection():
 # Database Access Functions with Pydantic Return Types
 
 def get_aadhaar_by_number(aadhaar_number: str) -> Optional[AadhaarRecord]:
-    print("------------------------------------1>"+aadhaar_number)
     connection = get_govt_db_connection()
-    print("------------------------------------2>"+aadhaar_number)
     try:
         cursor = connection.cursor(dictionary=True)
         query = "SELECT * FROM aadhaar_records WHERE aadhaar_id = %s"
         cursor.execute(query, (aadhaar_number,))
         result = cursor.fetchone()
         if result:
-            print(result)
             return AadhaarRecord(**result)
         return None
     except Error as e:

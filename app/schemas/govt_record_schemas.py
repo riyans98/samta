@@ -4,6 +4,10 @@ from datetime import date, time, datetime
 
 # Aadhaar Model
 class AadhaarRecord(BaseModel):
+
+    def __init__(self, **data):
+        super().__init__(**data)
+
     aadhaar_id: int
     full_name: str
     father_name: str
@@ -24,6 +28,10 @@ class AadhaarRecord(BaseModel):
 
 # FIR Model
 class FIRRecord(BaseModel):
+
+    def __init__(self, **data):
+        super().__init__(**data)
+
     fir_no: str
     police_station_code: str
     police_station_name: str

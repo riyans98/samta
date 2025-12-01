@@ -9,7 +9,9 @@ from pydantic import ValidationError
 from app.core.config import settings
 from app.core.security import verify_jwt_token # Protection
 from app.db.session import get_dbt_db_connection
-from app.schemas.dbt_schemas import AtrocityBase
+from app.schemas.dbt_schemas import AtrocityBase, AtrocityData
+from app.db.govt_session import get_fir_by_number, get_aadhaar_by_number
+from app.schemas.govt_record_schemas import FIRRecord, AadhaarRecord
 
 router = APIRouter(
     prefix="/dbt/case",
@@ -139,41 +141,65 @@ async def submit_fir_form(
     accountNumber: str = Form(..., description="Bank_Account_No"),
     ifscCode: Optional[str] = Form(None, description="IFSC_Code"),
     holderName: Optional[str] = Form(None, description="Holder_Name"),
-    bankName: str = Form(..., description="Bank Name (Not in DB)"), 
+    bankName: str = Form(..., description="Bank Name"), 
     branchName: str = Form(..., description="Branch Name (Not in DB)"),
     
     # Authenticated user info
     token_payload: dict = Depends(verify_jwt_token)
 ):
+    aadhaar_data = None
+    fir_data = None
+    
+    try:
+        aadhaar_data = get_aadhaar_by_number(aadhaar)
+        fir_data = get_fir_by_number(firNumber)
+
+        if aadhaar_data is None or fir_data is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aadhaar/FIR data not found")
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Cannot fetch Aadhaar/FIR data: {e}")
     
     # --- 1. Data Validation (Pydantic) ---
     try:
+
         # Convert date string to date object for validation
-        dob_date = date.fromisoformat(dob)
+
         
         # Prepare data structure for Pydantic validation (DB schema mapping)
         input_data = {
-            "FIR_NO": int(firNumber), # FIR_NO is INT in DB
-            "Case_Description": incidentDescription,
-            "Victim_Name": name,
-            "Father_Name": relation,
-            "Victim_DOB": dob_date,
-            "Gender": gender,
-            "Victim_Mobile_No": mobile,
+
+            # FIR Details
+            "FIR_NO": firNumber, # FIR_NO is INT in DB
+            "Case_Description": fir_data.incident_summary,
+            
+            # Victim Details
+            "Victim_Name": fir_data.victim_name,
+            "Father_Name": aadhaar_data.father_name,
+            "Victim_DOB": aadhaar_data.dob,
+            "Gender": aadhaar_data.gender.lower(),
+            "Victim_Mobile_No": aadhaar_data.mobile,
             "Aadhar_No": int(aadhaar) if aadhaar else None, # Aadhar is BIGINT in DB
             "Caste": caste,
+
+            # Bank Details
             "Bank_Account_No": accountNumber,
             "IFSC_Code": ifscCode,
             "Holder_Name": holderName,
+            "Bank_Name": bankName,
+
             # Applicant Details (assuming victim is applicant for simplicity based on form data)
-            "Applicant_Name": name, 
-            "Applicant_Relation": "Self",
-            "Applicant_Mobile_No": mobile,
+            "Applicant_Name": fir_data.complainant_name, 
+            "Applicant_Relation": fir_data.complainant_relation,
+            "Applicant_Mobile_No": fir_data.complainant_contact,
             "Applicant_Email": email,
+            "Applied_Acts": fir_data.sections_invoked,
+            "Location": fir_data.incident_location,
+            "Date_of_Incident": fir_data.incident_date,
         }
         
         # Validate data against the schema
         case_data = AtrocityBase(**input_data)
+
     except (ValidationError, ValueError) as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Validation Error: {e}")
     except Exception as e:
