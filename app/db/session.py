@@ -11,6 +11,7 @@ from app.core.config import settings
 
 # CONFIGS ko .env se load karna
 from app.core.config import settings
+from app.schemas.dbt_schemas import AtrocityBase
 
 # Login DB config (for reference)
 LOGIN_DB_CONFIG = {
@@ -99,12 +100,13 @@ def execute_insert(table_name: str, data: Dict[str, Any], hashed_password: str):
 # execute_login_query ko auth_service.py/security.py mein move karna behtar hai 
 # kyunki usme bcrypt aur password logic hai, jo ki DB se zyada security/business logic hai.
 
-def get_all_fir_data():
+def get_all_fir_data() -> list[AtrocityBase]:
     connection = get_dbt_db_connection()
     try:
         cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT * FROM ATROCITY")
-        result = cursor.fetchall()
+        data = cursor.fetchall()
+        result: list[AtrocityBase] = [AtrocityBase(**row) for row in data]
         return result
     except Error as e:
         raise HTTPException(

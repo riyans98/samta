@@ -27,7 +27,8 @@ class AtrocityBase(BaseModel):
     
     # --- Other DB required fields (Initial State) ---
     Stage: conint(ge=0, le=10) = 0
-    Pending_At: str = Field("Vishesh Thana Officer", max_length=100)
+    Pending_At: str = Field("Investigation Officer", max_length=100)
+    Approved_By: str = Field("", max_length=100)
     Applicant_Name: str = Field(..., max_length=150) # Assuming Victim_Name is the Applicant for now
     Applicant_Relation: Optional[str] = Field(None, max_length=100)
     Applicant_Mobile_No: str = Field(..., max_length=15)

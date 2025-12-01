@@ -2,10 +2,10 @@
 import shutil
 import os
 import re
-from fastapi import APIRouter, HTTPException, status, Depends, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Query, status, Depends, UploadFile, File, Form
 from typing import Dict, Any, Optional, List
 from datetime import date
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, conint
 
 from app.core.config import settings
 from app.core.security import verify_jwt_token # Protection
@@ -18,7 +18,7 @@ router = APIRouter(
     prefix="/dbt/case",
     tags=["DBT Case Management"],
     # Yahan JWT security lagao
-    dependencies=[Depends(verify_jwt_token)] 
+    # dependencies=[Depends(verify_jwt_token)] 
 )
 
 # --- Response Models for Documents ---
@@ -225,19 +225,20 @@ def insert_atrocity_case(data: Dict[str, Any]):
 
 @router.post("/submit_fir", status_code=status.HTTP_201_CREATED)
 async def submit_fir_form(
+    isDrafted: bool = Query(False),
     # --- FIR Details (Form Data)
     firNumber: str = Form(..., description="FIR_NO"),
-    incidentDescription: str = Form(..., description="Case_Description"),
+    # incidentDescription: str = Form(..., description="Case_Description"),
     firDocument: UploadFile = File(..., description="FIR Document File"),
 
     # --- Victim Details (Form Data)
-    name: str = Form(..., description="Victim_Name"),
-    dob: str = Form(..., description="Victim_DOB (YYYY-MM-DD)"),
-    relation: str = Form(..., description="Father_Name/Husband_Name"),
-    gender: str = Form(..., description="Gender"),
+    # name: str = Form(..., description="Victim_Name"),
+    # dob: str = Form(..., description="Victim_DOB (YYYY-MM-DD)"),
+    # relation: str = Form(..., description="Father_Name/Husband_Name"),
+    # gender: str = Form(..., description="Gender"),
     caste: str = Form(..., description="Caste"),
     aadhaar: str = Form(..., description="Aadhar_No"),
-    mobile: str = Form(..., description="Victim_Mobile_No"),
+    # mobile: str = Form(..., description="Victim_Mobile_No"),
     email: Optional[str] = Form(None, description="Applicant_Email"),
     photo: UploadFile = File(..., description="Victim_Image_No"),
 
@@ -252,7 +253,7 @@ async def submit_fir_form(
     ifscCode: Optional[str] = Form(None, description="IFSC_Code"),
     holderName: Optional[str] = Form(None, description="Holder_Name"),
     bankName: str = Form(..., description="Bank Name"), 
-    branchName: str = Form(..., description="Branch Name (Not in DB)"),
+    # branchName: str = Form(..., description="Branch Name (Not in DB)"),
     
     # Authenticated user info
     token_payload: dict = Depends(verify_jwt_token)
@@ -305,6 +306,8 @@ async def submit_fir_form(
             "Applied_Acts": fir_data.sections_invoked,
             "Location": fir_data.incident_location,
             "Date_of_Incident": fir_data.incident_date,
+
+            "Pending_At": 'Investigation Officer' if isDrafted else 'Tribal Officer',
         }
         
         # Validate data against the schema
@@ -360,8 +363,19 @@ async def submit_fir_form(
     return insert_atrocity_case(db_payload)
 
 @router.get("/get-fir-form-data", response_model=list[AtrocityBase])
-async def get_fir_form_data():
-    return get_all_fir_data()
+async def get_fir_form_data(
+    pending_at: str = Query("", max_length=100),
+    approved_by: str = Query("", max_length=100),
+    stage: conint(ge=0, le=10) = 0
+):
+    data:list[AtrocityBase] = get_all_fir_data()
+    if pending_at :
+        data = [d for d in data if d.Pending_At == pending_at]
+    if approved_by :
+        data = [d for d in data if d.Approved_By == approved_by]
+    if stage :
+        data = [d for d in data if d.Stage == stage]
+    return data
 
 @router.get("/get-fir-form-data/fir/{fir_no}", response_model=AtrocityWithDocuments)
 async def get_fir_form_data_by_case_no(fir_no: str):
