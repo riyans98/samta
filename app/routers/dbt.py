@@ -1,10 +1,11 @@
 # app/routers/dbt.py
 import shutil
 import os
+import re
 from fastapi import APIRouter, HTTPException, status, Depends, UploadFile, File, Form
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import date
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from app.core.config import settings
 from app.core.security import verify_jwt_token # Protection
@@ -20,21 +21,132 @@ router = APIRouter(
     # dependencies=[Depends(verify_jwt_token)] 
 )
 
+# --- Response Models for Documents ---
+class DocumentInfo(BaseModel):
+    """Information about a single document with base64 encoded content"""
+    filename: str
+    file_type: str
+    content: str  # Base64 encoded file content
+    file_size: int  # File size in bytes
+    mime_type: str  # MIME type for proper rendering
+
+class DocumentsByType(BaseModel):
+    """Documents organized by type"""
+    FIR: List[DocumentInfo] = []
+    PHOTO: List[DocumentInfo] = []
+    CASTE: List[DocumentInfo] = []
+    MEDICAL: List[DocumentInfo] = []
+    POSTMORTEM: List[DocumentInfo] = []
+    OTHER: List[DocumentInfo] = []
+
+class AtrocityWithDocuments(AtrocityBase):
+    """Atrocity case with associated documents"""
+    documents: DocumentsByType = DocumentsByType()
+
 # File names ko DB mein store karne ke liye ek helper function
 # app/routers/dbt.py (save_uploaded_file function ko replace karein)
 
 import os
 import shutil
+import base64
 from fastapi import UploadFile, HTTPException, status
+
+def get_mime_type(filename: str) -> str:
+    """Get MIME type based on file extension"""
+    ext = os.path.splitext(filename)[1].lower()
+    mime_types = {
+        '.pdf': 'application/pdf',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+    }
+    return mime_types.get(ext, 'application/octet-stream')
+
+def get_documents_by_fir_no(fir_no: str) -> DocumentsByType:
+    """
+    Retrieves all documents for a given FIR number from the upload directory.
+    
+    Returns base64-encoded file content so it can be sent across different servers.
+    
+    Filename pattern: FIR{firNumber}_{userId}_{FILE_TYPE}.{extension}
+    Example: FIRFIR-2025-004_user_PHOTO.png
+    
+    Parses the filename to extract document type,
+    then organizes documents by type with their content.
+    """
+    documents = DocumentsByType()
+    
+    if not os.path.exists(settings.UPLOAD_DIR):
+        return documents
+    
+    try:
+        # Pattern to match files with document type before extension
+        # Handles both old format (FIR{fir_no}_{user}_{TYPE}_FIR.{ext}) and new format (FIR{fir_no}_{user}_{TYPE}.{ext})
+        # FIR numbers may contain hyphens and special characters
+        # Capturing group: document type (between second-to-last or third-to-last _ and .ext)
+        escaped_fir = re.escape(fir_no)
+        # Pattern matches: FIR{fir_no}_{user}_{TYPE}(_FIR)?.{ext}
+        # (_FIR)? is optional to handle both old and new filename formats
+        pattern = rf"FIR{escaped_fir}_[^_]+_([A-Z]+)(?:_FIR)?\.[a-zA-Z0-9]+"
+        
+        for filename in os.listdir(settings.UPLOAD_DIR):
+            match = re.match(pattern, filename)
+            if match:
+                file_type = match.group(1)
+                file_path = os.path.join(settings.UPLOAD_DIR, filename)
+                
+                try:
+                    # Read file and encode as base64
+                    with open(file_path, 'rb') as f:
+                        file_content = f.read()
+                    
+                    # Get file size
+                    file_size = len(file_content)
+                    
+                    # Encode to base64
+                    base64_content = base64.b64encode(file_content).decode('utf-8')
+                    
+                    # Get MIME type
+                    mime_type = get_mime_type(filename)
+                    
+                    doc_info = DocumentInfo(
+                        filename=filename,
+                        file_type=file_type,
+                        content=base64_content,
+                        file_size=file_size,
+                        mime_type=mime_type
+                    )
+                    
+                    # Organize by document type
+                    if file_type == "FIR":
+                        documents.FIR.append(doc_info)
+                    elif file_type == "PHOTO":
+                        documents.PHOTO.append(doc_info)
+                    elif file_type == "CASTE":
+                        documents.CASTE.append(doc_info)
+                    elif file_type == "MEDICAL":
+                        documents.MEDICAL.append(doc_info)
+                    elif file_type == "POSTMORTEM":
+                        documents.POSTMORTEM.append(doc_info)
+                    else:
+                        documents.OTHER.append(doc_info)
+                
+                except Exception as e:
+                    print(f"Error reading file {filename}: {e}")
+                    continue
+    
+    except Exception as e:
+        print(f"Error retrieving documents for FIR {fir_no}: {e}")
+    
+    return documents
+
 # ... (other imports)
-#removeed file_type: str to fix an error
 def save_uploaded_file(file: UploadFile, base_name: str) -> str:
     """
     Saves the file to the local directory and returns the generated filename.
 
     :param file: The UploadFile object.
-    :param base_name: The base name for the file (e.g., FIR_NO).
-    :param file_type: Descriptive type (e.g., 'FIR', 'PHOTO', 'CASTE').
+    :param base_name: The base name including document type (e.g., FIRFIR-2025-001_user_PHOTO).
     """
     if not file or not file.filename:
         return "" # Handle optional files
@@ -48,11 +160,9 @@ def save_uploaded_file(file: UploadFile, base_name: str) -> str:
              detail=f"Invalid file type: {file.filename}. Only PDF/JPG/PNG allowed."
          )
 
-    # 2. Filename Format (e.g., 1234_FIR_DOC.pdf)
-    # Isse unique file name banega: <BaseName>_<FILE_TYPE><extension>
-    #generated_filename = f"{base_name}_{file_type.upper()}{file_extension.lower()}"
-    file_type="FIR"  # removed to fix an error
-    generated_filename = f"{base_name}_{file_type.upper()}{file_extension.lower()}"
+    # 2. Filename Format: base_name already contains FIR{firNumber}_{userId}_{FILE_TYPE}
+    # So just append extension
+    generated_filename = f"{base_name}{file_extension.lower()}"
     file_path = os.path.join(settings.UPLOAD_DIR, generated_filename)
 
     # 3. File Save Karna
@@ -253,6 +363,32 @@ async def submit_fir_form(
 async def get_fir_form_data():
     return get_all_fir_data()
 
-@router.get("/get-fir-form-data/fir/{fir_no}", response_model=AtrocityBase)
+@router.get("/get-fir-form-data/fir/{fir_no}", response_model=AtrocityWithDocuments)
 async def get_fir_form_data_by_case_no(fir_no: str):
-    return get_fir_data_by_fir_no(fir_no)
+    """
+    Retrieves FIR data along with all associated documents organized by type.
+    
+    Documents are identified by FIR number and organized by document type:
+    - FIR: FIR documents
+    - PHOTO: Victim photos
+    - CASTE: Caste certificates
+    - MEDICAL: Medical reports
+    - POSTMORTEM: Postmortem reports
+    - OTHER: Other documents
+    """
+    # Get FIR data from database
+    fir_data = get_fir_data_by_fir_no(fir_no)
+    
+    # Get associated documents organized by type
+    documents = get_documents_by_fir_no(fir_no)
+    
+    # Convert FIR data to dict and add documents
+    fir_dict = fir_data if isinstance(fir_data, dict) else fir_data.__dict__
+    
+    # Create response with documents
+    response = AtrocityWithDocuments(
+        documents=documents,
+        **fir_dict
+    )
+    
+    return response
