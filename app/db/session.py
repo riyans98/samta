@@ -99,3 +99,52 @@ def execute_insert(table_name: str, data: Dict[str, Any], hashed_password: str):
 # execute_login_query ko auth_service.py/security.py mein move karna behtar hai 
 # kyunki usme bcrypt aur password logic hai, jo ki DB se zyada security/business logic hai.
 
+def get_all_fir_data():
+    connection = get_dbt_db_connection()
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM ATROCITY")
+        result = cursor.fetchall()
+        return result
+    except Error as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database query failed: {e}"
+        )
+    finally:
+        cursor.close()
+        connection.close()
+
+def get_fir_data_by_case_no(case_no: int):
+    connection = get_dbt_db_connection()
+    try:
+        cursor = connection.cursor(dictionary=True)
+        query = "SELECT * FROM ATROCITY WHERE Case_No = %s"
+        cursor.execute(query, (case_no,))
+        result = cursor.fetchone()
+        return result
+    except Error as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database query failed: {e}"
+        )
+    finally:
+        cursor.close()
+        connection.close()
+
+def get_fir_data_by_fir_no(fir_no: str):
+    connection = get_dbt_db_connection()
+    try:
+        cursor = connection.cursor(dictionary=True)
+        query = "SELECT * FROM ATROCITY WHERE FIR_NO = %s"
+        cursor.execute(query, (fir_no,))
+        result = cursor.fetchone()
+        return result
+    except Error as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database query failed: {e}"
+        )
+    finally:
+        cursor.close()
+        connection.close()

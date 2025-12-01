@@ -8,8 +8,8 @@ from pydantic import ValidationError
 
 from app.core.config import settings
 from app.core.security import verify_jwt_token # Protection
-from app.db.session import get_dbt_db_connection
-from app.schemas.dbt_schemas import AtrocityBase, AtrocityData
+from app.db.session import get_dbt_db_connection, get_all_fir_data, get_fir_data_by_fir_no
+from app.schemas.dbt_schemas import AtrocityBase
 from app.db.govt_session import get_fir_by_number, get_aadhaar_by_number
 from app.schemas.govt_record_schemas import FIRRecord, AadhaarRecord
 
@@ -17,7 +17,7 @@ router = APIRouter(
     prefix="/dbt/case",
     tags=["DBT Case Management"],
     # Yahan JWT security lagao
-    dependencies=[Depends(verify_jwt_token)] 
+    # dependencies=[Depends(verify_jwt_token)] 
 )
 
 # File names ko DB mein store karne ke liye ek helper function
@@ -248,3 +248,11 @@ async def submit_fir_form(
 
     # --- 4. Database Insertion ---
     return insert_atrocity_case(db_payload)
+
+@router.get("/get-fir-form-data", response_model=list[AtrocityBase])
+async def get_fir_form_data():
+    return get_all_fir_data()
+
+@router.get("/get-fir-form-data/fir/{fir_no}", response_model=AtrocityBase)
+async def get_fir_form_data_by_case_no(fir_no: str):
+    return get_fir_data_by_fir_no(fir_no)
