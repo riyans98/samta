@@ -60,6 +60,7 @@ class FIRRecord(BaseModel):
     incident_location: str
     incident_summary: str
     sections_invoked: Optional[str] = None
+    case_action: Optional[str] = None
 
     investigating_officer: str
     case_status: str

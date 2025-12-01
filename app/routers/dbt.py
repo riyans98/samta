@@ -18,7 +18,7 @@ router = APIRouter(
     prefix="/dbt/case",
     tags=["DBT Case Management"],
     # Yahan JWT security lagao
-    # dependencies=[Depends(verify_jwt_token)] 
+    dependencies=[Depends(verify_jwt_token)] 
 )
 
 # --- Response Models for Documents ---
