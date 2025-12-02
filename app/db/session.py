@@ -2,7 +2,7 @@
 import mysql.connector
 from mysql.connector import Error
 from fastapi import HTTPException, status
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 # CONFIGS ko .env se load karna
 from app.core.config import settings
@@ -11,7 +11,7 @@ from app.core.config import settings
 
 # CONFIGS ko .env se load karna
 from app.core.config import settings
-from app.schemas.dbt_schemas import AtrocityBase
+from app.schemas.dbt_schemas import AtrocityDBModel, CaseEvent
 
 # Login DB config (for reference)
 LOGIN_DB_CONFIG = {
@@ -100,14 +100,13 @@ def execute_insert(table_name: str, data: Dict[str, Any], hashed_password: str):
 # execute_login_query ko auth_service.py/security.py mein move karna behtar hai 
 # kyunki usme bcrypt aur password logic hai, jo ki DB se zyada security/business logic hai.
 
-def get_all_fir_data() -> list[AtrocityBase]:
+def get_all_fir_data() -> list[AtrocityDBModel]:
     connection = get_dbt_db_connection()
     try:
         cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT * FROM ATROCITY")
         data = cursor.fetchall()
-        result: list[AtrocityBase] = [AtrocityBase(**row) for row in data]
-        return result
+        return [AtrocityDBModel(**row) for row in data]
     except Error as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -117,14 +116,16 @@ def get_all_fir_data() -> list[AtrocityBase]:
         cursor.close()
         connection.close()
 
-def get_fir_data_by_case_no(case_no: int):
+def get_fir_data_by_case_no(case_no: int) -> AtrocityDBModel:
     connection = get_dbt_db_connection()
     try:
         cursor = connection.cursor(dictionary=True)
         query = "SELECT * FROM ATROCITY WHERE Case_No = %s"
         cursor.execute(query, (case_no,))
-        result = cursor.fetchone()
-        return result
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return AtrocityDBModel(**row)
     except Error as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -134,14 +135,16 @@ def get_fir_data_by_case_no(case_no: int):
         cursor.close()
         connection.close()
 
-def get_fir_data_by_fir_no(fir_no: str):
+def get_fir_data_by_fir_no(fir_no: str) -> AtrocityDBModel:
     connection = get_dbt_db_connection()
     try:
         cursor = connection.cursor(dictionary=True)
         query = "SELECT * FROM ATROCITY WHERE FIR_NO = %s"
         cursor.execute(query, (fir_no,))
-        result = cursor.fetchone()
-        return result
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return AtrocityDBModel(**row)
     except Error as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -150,3 +153,17 @@ def get_fir_data_by_fir_no(fir_no: str):
     finally:
         cursor.close()
         connection.close()
+
+def get_timeline(case_no: int) -> List[CaseEvent]:
+    conn = get_dbt_db_connection()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM CASE_EVENTS WHERE case_no = %s ORDER BY created_at ASC",
+            (case_no,)
+        )
+        rows = cursor.fetchall()
+        return [CaseEvent(**row) for row in rows]
+    finally:
+        cursor.close()
+        conn.close()

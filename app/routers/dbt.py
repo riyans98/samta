@@ -3,16 +3,14 @@ import shutil
 import os
 import re
 from fastapi import APIRouter, HTTPException, Query, status, Depends, UploadFile, File, Form
-from typing import Dict, Any, Optional, List
-from datetime import date
-from pydantic import BaseModel, ValidationError, conint
+from typing import Dict, Any, Optional
+from pydantic import ValidationError, conint
 
 from app.core.config import settings
 from app.core.security import verify_jwt_token # Protection
-from app.db.session import get_dbt_db_connection, get_all_fir_data, get_fir_data_by_fir_no
-from app.schemas.dbt_schemas import AtrocityBase
+from app.db.session import get_dbt_db_connection, get_all_fir_data, get_fir_data_by_fir_no, get_timeline
+from app.schemas.dbt_schemas import AtrocityBase, AtrocityDBModel, AtrocityFullRecord, DocumentInfo, DocumentsByType
 from app.db.govt_session import get_fir_by_number, get_aadhaar_by_number
-from app.schemas.govt_record_schemas import FIRRecord, AadhaarRecord
 
 router = APIRouter(
     prefix="/dbt/case",
@@ -21,27 +19,6 @@ router = APIRouter(
     # dependencies=[Depends(verify_jwt_token)] 
 )
 
-# --- Response Models for Documents ---
-class DocumentInfo(BaseModel):
-    """Information about a single document with base64 encoded content"""
-    filename: str
-    file_type: str
-    content: str  # Base64 encoded file content
-    file_size: int  # File size in bytes
-    mime_type: str  # MIME type for proper rendering
-
-class DocumentsByType(BaseModel):
-    """Documents organized by type"""
-    FIR: List[DocumentInfo] = []
-    PHOTO: List[DocumentInfo] = []
-    CASTE: List[DocumentInfo] = []
-    MEDICAL: List[DocumentInfo] = []
-    POSTMORTEM: List[DocumentInfo] = []
-    OTHER: List[DocumentInfo] = []
-
-class AtrocityWithDocuments(AtrocityBase):
-    """Atrocity case with associated documents"""
-    documents: DocumentsByType = DocumentsByType()
 
 # File names ko DB mein store karne ke liye ek helper function
 # app/routers/dbt.py (save_uploaded_file function ko replace karein)
@@ -362,13 +339,13 @@ async def submit_fir_form(
     # --- 4. Database Insertion ---
     return insert_atrocity_case(db_payload)
 
-@router.get("/get-fir-form-data", response_model=list[AtrocityBase])
+@router.get("/get-fir-form-data", response_model=list[AtrocityDBModel])
 async def get_fir_form_data(
     pending_at: str = Query("", max_length=100),
     approved_by: str = Query("", max_length=100),
     stage: conint(ge=0, le=10) = 0
 ):
-    data:list[AtrocityBase] = get_all_fir_data()
+    data:list[AtrocityDBModel] = get_all_fir_data()
     if pending_at :
         data = [d for d in data if d.Pending_At == pending_at]
     if approved_by :
@@ -377,32 +354,15 @@ async def get_fir_form_data(
         data = [d for d in data if d.Stage == stage]
     return data
 
-@router.get("/get-fir-form-data/fir/{fir_no}", response_model=AtrocityWithDocuments)
+@router.get("/get-fir-form-data/fir/{fir_no}", response_model=AtrocityFullRecord)
 async def get_fir_form_data_by_case_no(fir_no: str):
-    """
-    Retrieves FIR data along with all associated documents organized by type.
-    
-    Documents are identified by FIR number and organized by document type:
-    - FIR: FIR documents
-    - PHOTO: Victim photos
-    - CASTE: Caste certificates
-    - MEDICAL: Medical reports
-    - POSTMORTEM: Postmortem reports
-    - OTHER: Other documents
-    """
+
     # Get FIR data from database
-    fir_data = get_fir_data_by_fir_no(fir_no)
-    
-    # Get associated documents organized by type
-    documents = get_documents_by_fir_no(fir_no)
-    
-    # Convert FIR data to dict and add documents
-    fir_dict = fir_data if isinstance(fir_data, dict) else fir_data.__dict__
-    
-    # Create response with documents
-    response = AtrocityWithDocuments(
-        documents=documents,
-        **fir_dict
+    data = get_fir_data_by_fir_no(fir_no)
+    docs = get_documents_by_fir_no(fir_no)
+
+    return AtrocityFullRecord(
+        data=data,
+        documents=docs,
+        events=get_timeline(data.Case_No)
     )
-    
-    return response
