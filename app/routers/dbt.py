@@ -8,8 +8,31 @@ from pydantic import ValidationError, conint
 
 from app.core.config import settings
 from app.core.security import verify_jwt_token # Protection
-from app.db.session import get_dbt_db_connection, get_all_fir_data, get_fir_data_by_fir_no, get_timeline
-from app.schemas.dbt_schemas import AtrocityBase, AtrocityDBModel, AtrocityFullRecord, DocumentInfo, DocumentsByType
+from app.db.session import (
+    get_dbt_db_connection, 
+    get_all_fir_data, 
+    get_fir_data_by_fir_no, 
+    get_fir_data_by_case_no,
+    get_timeline,
+    insert_case_event,
+    update_atrocity_case
+)
+from app.schemas.dbt_schemas import (
+    AtrocityBase, 
+    AtrocityDBModel, 
+    AtrocityFullRecord, 
+    DocumentInfo, 
+    DocumentsByType,
+    ApprovalPayload,
+    CorrectionPayload,
+    ChargeSheetPayload,
+    CaseCompletionPayload,
+    FundReleasePayload,
+    CaseEvent,
+    STAGE_ALLOWED_ROLE,
+    STAGE_NEXT_PENDING_AT,
+    STAGE_APPROVAL_EVENT
+)
 from app.db.govt_session import get_fir_by_number, get_aadhaar_by_number
 
 router = APIRouter(
@@ -366,3 +389,385 @@ async def get_fir_form_data_by_case_no(fir_no: str):
         documents=docs,
         events=get_timeline(data.Case_No)
     )
+
+
+# ======================================================================
+# WORKFLOW ENDPOINTS (Per BACKEND_DATA_CONTRACT.md)
+# ======================================================================
+
+def validate_role_for_action(
+    token_payload: dict, 
+    payload_role: str, 
+    case: AtrocityDBModel, 
+    expected_stage: int | list[int]
+):
+    """
+    Validates that:
+    1. JWT user role matches the role claimed in payload (403 if mismatch)
+    2. Case is at the expected stage for this action (400 if wrong stage)
+    3. The claimed role is allowed to act at this stage (403 if not allowed)
+    """
+    # 1. JWT role must match payload role
+    jwt_role = token_payload.get("role")
+    if jwt_role != payload_role:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Role mismatch: JWT role '{jwt_role}' does not match payload role '{payload_role}'"
+        )
+    
+    # 2. Check if case is at expected stage
+    expected_stages = expected_stage if isinstance(expected_stage, list) else [expected_stage]
+    if case.Stage not in expected_stages:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Case is at stage {case.Stage}, but this action requires stage {expected_stages}"
+        )
+    
+    # 3. Check if role is allowed at this stage
+    allowed_role = STAGE_ALLOWED_ROLE.get(case.Stage)
+    if allowed_role and payload_role != allowed_role:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Role '{payload_role}' cannot act at stage {case.Stage}. Expected: '{allowed_role}'"
+        )
+
+
+@router.post("/{case_no}/approve", status_code=status.HTTP_200_OK)
+async def approve_case(
+    case_no: int,
+    payload: ApprovalPayload,
+    token_payload: dict = Depends(verify_jwt_token)
+):
+    """
+    Approve a case and move it to the next stage.
+    
+    Allowed transitions:
+    - Stage 1 (TO verifies) → Stage 2 (DM pending)
+    - Stage 2 (DM approves) → Stage 3 (SNO pending)
+    - Stage 3 (SNO sanctions) → Stage 4 (PFMS pending)
+    """
+    # Get current case
+    case = get_fir_data_by_case_no(case_no)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    
+    # Ensure stage is set
+    if case.Stage is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Case stage is not set")
+    
+    # Validate role and stage (stages 1, 2, 3 allow approve action)
+    validate_role_for_action(token_payload, payload.role, case, [1, 2, 3])
+    
+    # Determine event type based on current stage
+    event_type = STAGE_APPROVAL_EVENT.get(case.Stage, "APPROVED")
+    
+    # Insert event
+    event_data = {
+        "comment": payload.comment,
+        "next_stage": payload.next_stage,
+        **(payload.payload or {})
+    }
+    insert_case_event(
+        case_no=case_no,
+        performed_by=payload.actor,
+        performed_by_role=payload.role,
+        event_type=event_type,
+        event_data=event_data
+    )
+    
+    # Update case stage and pending_at
+    next_pending_at = STAGE_NEXT_PENDING_AT.get(case.Stage, "")
+    update_atrocity_case(case_no, {
+        "Stage": payload.next_stage,
+        "Pending_At": next_pending_at,
+        "Approved_By": payload.actor
+    })
+    
+    return {
+        "message": f"Case {case_no} approved successfully",
+        "new_stage": payload.next_stage,
+        "pending_at": next_pending_at,
+        "event_type": event_type
+    }
+
+
+@router.post("/{case_no}/correction", status_code=status.HTTP_200_OK)
+async def request_correction(
+    case_no: int,
+    payload: CorrectionPayload,
+    token_payload: dict = Depends(verify_jwt_token)
+):
+    """
+    Request correction on a case. Only DM can do this at stage 2.
+    Case goes back to Tribal Officer (stage 1).
+    
+    Transition: Stage 2 → Stage 1 (DM → Tribal Officer)
+    """
+    # Get current case
+    case = get_fir_data_by_case_no(case_no)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    
+    # Only DM at stage 2 can request correction
+    validate_role_for_action(token_payload, payload.role, case, 2)
+    
+    if payload.role != "District Magistrate":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only District Magistrate can request corrections"
+        )
+    
+    # Insert correction event
+    event_data = {
+        "comment": payload.comment,
+        "corrections_required": payload.corrections_required
+    }
+    insert_case_event(
+        case_no=case_no,
+        performed_by=payload.actor,
+        performed_by_role=payload.role,
+        event_type="DM_CORRECTION",
+        event_data=event_data
+    )
+    
+    # Send case back to Tribal Officer (stage 1)
+    update_atrocity_case(case_no, {
+        "Stage": 1,
+        "Pending_At": "Tribal Officer"
+    })
+    
+    return {
+        "message": f"Correction requested for case {case_no}",
+        "new_stage": 1,
+        "pending_at": "Tribal Officer",
+        "corrections_required": payload.corrections_required
+    }
+
+
+@router.post("/{case_no}/fund-release", status_code=status.HTTP_200_OK)
+async def release_funds(
+    case_no: int,
+    payload: FundReleasePayload,
+    token_payload: dict = Depends(verify_jwt_token)
+):
+    """
+    Release funds (tranche) to the victim. PFMS Officer only.
+    
+    Tranche stages:
+    - Stage 4: First 25% → Stage 5 (chargesheet pending)
+    - Stage 6: Second 25-50% → Stage 7 (judgment pending)
+    - Stage 7: Final tranche → Stage 8 (case closed)
+    
+    Fund amounts are tracked ONLY in CASE_EVENTS (not in ATROCITY table).
+    """
+    # Get current case
+    case = get_fir_data_by_case_no(case_no)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    
+    # PFMS Officer can release funds at stages 4, 6, 7
+    validate_role_for_action(token_payload, payload.role, case, [4, 6, 7])
+    
+    if payload.role != "PFMS Officer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only PFMS Officer can release funds"
+        )
+    
+    # Determine tranche type and next stage
+    current_stage = case.Stage
+    if current_stage == 4:
+        event_type = "PFMS_FIRST_TRANCHE"
+        next_stage = 5
+        next_pending_at = "Investigation Officer"
+        tranche_label = "First Tranche (25%)"
+    elif current_stage == 6:
+        event_type = "PFMS_SECOND_TRANCHE"
+        next_stage = 7
+        next_pending_at = "District Magistrate"
+        tranche_label = "Second Tranche (25-50%)"
+    elif current_stage == 7:
+        event_type = "PFMS_FINAL_TRANCHE"
+        next_stage = 8
+        next_pending_at = ""  # Case closed
+        tranche_label = "Final Tranche"
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Fund release not allowed at stage {current_stage}"
+        )
+    
+    # Insert fund release event with all tranche details
+    event_data = {
+        "amount": payload.amount,
+        "percent_of_total": payload.percent_of_total,
+        "fund_type": payload.fund_type,
+        "txn_id": payload.txn_id,
+        "bank_acknowledgement": payload.bank_acknowledgement,
+        "tranche_label": tranche_label
+    }
+    insert_case_event(
+        case_no=case_no,
+        performed_by=payload.actor,
+        performed_by_role=payload.role,
+        event_type=event_type,
+        event_data=event_data
+    )
+    
+    # Update case stage (Fund_Ammount stays unchanged - it's total approved amount)
+    update_atrocity_case(case_no, {
+        "Stage": next_stage,
+        "Pending_At": next_pending_at
+    })
+    
+    return {
+        "message": f"{tranche_label} released for case {case_no}",
+        "amount": payload.amount,
+        "percent_of_total": payload.percent_of_total,
+        "txn_id": payload.txn_id,
+        "new_stage": next_stage,
+        "pending_at": next_pending_at
+    }
+
+
+@router.post("/{case_no}/chargesheet", status_code=status.HTTP_200_OK)
+async def submit_chargesheet(
+    case_no: int,
+    payload: ChargeSheetPayload,
+    token_payload: dict = Depends(verify_jwt_token)
+):
+    """
+    Submit chargesheet for a case. Investigation Officer only at stage 5.
+    
+    Transition: Stage 5 → Stage 6 (Chargesheet submitted, second tranche pending)
+    """
+    # Get current case
+    case = get_fir_data_by_case_no(case_no)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    
+    # IO at stage 5 can submit chargesheet
+    validate_role_for_action(token_payload, payload.role, case, 5)
+    
+    if payload.role != "Investigation Officer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Investigation Officer can submit chargesheet"
+        )
+    
+    # Insert chargesheet event
+    event_data = {
+        "chargesheet_no": payload.chargesheet_no,
+        "chargesheet_date": payload.chargesheet_date,
+        "court_name": payload.court_name,
+        "severity": payload.severity
+    }
+    insert_case_event(
+        case_no=case_no,
+        performed_by=payload.actor,
+        performed_by_role=payload.role,
+        event_type="CHARGESHEET_SUBMITTED",
+        event_data=event_data
+    )
+    
+    # Move to stage 6 (second tranche pending)
+    update_atrocity_case(case_no, {
+        "Stage": 6,
+        "Pending_At": "PFMS Officer"
+    })
+    
+    return {
+        "message": f"Chargesheet submitted for case {case_no}",
+        "chargesheet_no": payload.chargesheet_no,
+        "new_stage": 6,
+        "pending_at": "PFMS Officer"
+    }
+
+
+@router.post("/{case_no}/complete", status_code=status.HTTP_200_OK)
+async def complete_case(
+    case_no: int,
+    payload: CaseCompletionPayload,
+    token_payload: dict = Depends(verify_jwt_token)
+):
+    """
+    Complete a case with judgment details. District Magistrate only at stage 7.
+    
+    After judgment, case moves to awaiting final tranche (stays at stage 7,
+    pending at PFMS Officer for final release).
+    
+    Note: This records the judgment. Final fund release is a separate call.
+    """
+    # Get current case
+    case = get_fir_data_by_case_no(case_no)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    
+    # DM at stage 7 can complete case
+    # Note: At stage 7, DM records judgment (allowed role should be DM here)
+    jwt_role = token_payload.get("role")
+    if jwt_role != payload.role:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Role mismatch: JWT role '{jwt_role}' does not match payload role '{payload.role}'"
+        )
+    
+    if case.Stage != 7:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Case is at stage {case.Stage}, but completion requires stage 7"
+        )
+    
+    if payload.role != "District Magistrate":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only District Magistrate can complete a case"
+        )
+    
+    # Insert judgment event
+    event_data = {
+        "judgment_ref": payload.judgment_ref,
+        "judgment_date": payload.judgment_date,
+        "verdict": payload.verdict,
+        "notes": payload.notes
+    }
+    insert_case_event(
+        case_no=case_no,
+        performed_by=payload.actor,
+        performed_by_role=payload.role,
+        event_type="DM_JUDGMENT_RECORDED",
+        event_data=event_data
+    )
+    
+    # Case stays at stage 7 but now awaits final tranche from PFMS
+    update_atrocity_case(case_no, {
+        "Pending_At": "PFMS Officer",
+        "Approved_By": payload.actor
+    })
+    
+    return {
+        "message": f"Judgment recorded for case {case_no}",
+        "judgment_ref": payload.judgment_ref,
+        "verdict": payload.verdict,
+        "stage": 7,
+        "pending_at": "PFMS Officer",
+        "note": "Awaiting final tranche release"
+    }
+
+
+@router.get("/{case_no}/events", response_model=list[CaseEvent])
+async def get_case_events(
+    case_no: int,
+    token_payload: dict = Depends(verify_jwt_token)
+):
+    """
+    Get all timeline events for a case.
+    Requires JWT authentication (any authenticated user can view).
+    """
+    # Verify case exists
+    case = get_fir_data_by_case_no(case_no)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    
+    events = get_timeline(case_no)
+    return events

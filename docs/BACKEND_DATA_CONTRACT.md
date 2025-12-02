@@ -135,7 +135,7 @@ This is what **case detail API** returns.
       "case_no": 3,
       "performed_by": "Officer Singh",
       "performed_by_role": "Tribal Officer",
-      "event_type": "VERIFICATION_APPROVED",
+      "event_type": "TO_APPROVED",
       "event_data": { ... optional ... },
       "created_at": "2025-01-10T10:32:00"
     }
@@ -167,15 +167,15 @@ Examples of `event_type`:
 
 ```
 "FIR_SUBMITTED"
-"VERIFICATION_APPROVED"
-"VERIFICATION_CORRECTION"
+"TO_APPROVED"
 "DM_APPROVED"
+"SNO_APPROVED"
 "DM_CORRECTION"
-"SNO_FUNDS_SANCTIONED"
-"PFMS_TRANSFERRED"
+"PFMS_FIRST_TRANCHE"
 "CHARGESHEET_SUBMITTED"
-"JUDGEMENT_COMPLETED"
-"FINAL_RELEASE"
+"PFMS_SECOND_TRANCHE"
+"DM_JUDGMENT_RECORDED"
+"PFMS_FINAL_TRANCHE"
 ```
 
 ---
@@ -229,18 +229,32 @@ Returned data includes:
 }
 ```
 
+**Correction Flow Rules:**
+- Only the District Magistrate can request corrections.
+- Correction ALWAYS moves case from stage 2 → stage 1.
+- Tribal Officer fixes and re-approves.
+- Case NEVER returns to Investigation Officer for corrections.
+
 ### Fund Release
 
 ```python
 {
-  "actor": "SNO",
-  "role": "State Nodal Officer",
+  "actor": "PFMS Officer",
+  "role": "PFMS Officer",
   "amount": 50000,
   "percent_of_total": 25,
   "fund_type": "Immediate Relief",
   "txn_id": "PFMS12345"
 }
 ```
+
+**Fund Tranche Transitions:**
+- Stage 4 → PFMS releases First Tranche (25%) → moves to Stage 5
+- Stage 5 → IO submits chargesheet → moves to Stage 6
+- Stage 6 → PFMS releases Second Tranche (25-50%) → moves to Stage 7
+- Stage 7 → DM records judgment → PFMS releases Final Tranche → Stage 8
+
+**Important:** All tranche releases are stored ONLY in CASE_EVENTS. The `Fund_Ammount` field in ATROCITY stores the TOTAL APPROVED amount and never changes.
 
 ### Chargesheet
 
@@ -272,19 +286,30 @@ Returned data includes:
 
 # 9) Case Stages (Canonical)
 
-Copilot MUST use these exact stage numbers:
+Copilot MUST use these exact stage numbers and transitions:
 
 ```
-0 = FIR Submitted (IO)
-1 = Verification Pending (Tribal Officer)
-2 = DM Approval Pending
-3 = SNO Fund Sanction Pending
-4 = PFMS Fund Transfer Pending
-5 = Chargesheet Submission Pending
-6 = Judgment Pending (DM)
-7 = Final Fund Release
-8 = Case Closed
+0 = FIR Submitted (IO) → Pending at Tribal Officer
+1 = Verification Pending (Tribal Officer) → Pending at District Magistrate
+2 = DM Approval Pending → Pending at State Nodal Officer
+3 = SNO Fund Sanction Pending → Pending at PFMS Officer
+4 = First Tranche Release Pending (PFMS) → Pending at Investigation Officer
+5 = Chargesheet Submission Pending (IO) → Pending at PFMS Officer
+6 = Second Tranche Release Pending (PFMS) → Pending at District Magistrate
+7 = Judgment Pending (DM) → Pending at PFMS Officer
+8 = Final Tranche Release → Case Closed
 ```
+
+### Stage Transitions:
+- Stage 0 → 1: IO submits FIR (auto)
+- Stage 1 → 2: Tribal Officer approves
+- Stage 2 → 3: District Magistrate approves
+- Stage 2 → 1: District Magistrate requests correction (back to TO)
+- Stage 3 → 4: State Nodal Officer approves
+- Stage 4 → 5: PFMS releases First Tranche (25%)
+- Stage 5 → 6: Investigation Officer submits chargesheet
+- Stage 6 → 7: PFMS releases Second Tranche (25-50%)
+- Stage 7 → 8: District Magistrate records judgment, PFMS releases Final Tranche
 
 ---
 
@@ -312,6 +337,10 @@ Instead:
 * When generating endpoints, always return the wrapper model
 * DB first → wrapper → frontend
 * Timeline must always attach to case detail
+* **JWT role MUST match payload.role exactly** — if mismatch, return 403 Forbidden
+* Do NOT introduce any new fields in ATROCITY table
+* Store total approved fund ONLY in `Fund_Ammount`
+* Store all tranche releases ONLY inside `CASE_EVENTS`
 
 ---
 

@@ -167,3 +167,71 @@ def get_timeline(case_no: int) -> List[CaseEvent]:
     finally:
         cursor.close()
         conn.close()
+
+
+def insert_case_event(
+    case_no: int,
+    performed_by: str,
+    performed_by_role: str,
+    event_type: str,
+    event_data: Dict[str, Any] | None = None
+) -> int:
+    """
+    Inserts a new event into the CASE_EVENTS table.
+    Returns the event_id of the inserted row.
+    """
+    import json
+    conn = get_dbt_db_connection()
+    try:
+        cursor = conn.cursor()
+        query = """
+            INSERT INTO CASE_EVENTS (case_no, performed_by, performed_by_role, event_type, event_data)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        event_data_json = json.dumps(event_data) if event_data else None
+        cursor.execute(query, (case_no, performed_by, performed_by_role, event_type, event_data_json))
+        conn.commit()
+        return cursor.lastrowid
+    except Error as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to insert case event: {e}"
+        )
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def update_atrocity_case(case_no: int, updates: Dict[str, Any]) -> bool:
+    """
+    Updates specified fields in the ATROCITY table for a given case.
+    Only updates Stage, Pending_At, Approved_By fields (workflow-related).
+    Returns True if update was successful.
+    """
+    if not updates:
+        return False
+    
+    # Only allow workflow-related field updates
+    allowed_fields = {'Stage', 'Pending_At', 'Approved_By'}
+    filtered_updates = {k: v for k, v in updates.items() if k in allowed_fields}
+    
+    if not filtered_updates:
+        return False
+    
+    conn = get_dbt_db_connection()
+    try:
+        cursor = conn.cursor()
+        set_clause = ", ".join([f"{k} = %s" for k in filtered_updates.keys()])
+        values = list(filtered_updates.values()) + [case_no]
+        query = f"UPDATE ATROCITY SET {set_clause} WHERE Case_No = %s"
+        cursor.execute(query, values)
+        conn.commit()
+        return cursor.rowcount > 0
+    except Error as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update atrocity case: {e}"
+        )
+    finally:
+        cursor.close()
+        conn.close()

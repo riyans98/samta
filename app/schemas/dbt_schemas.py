@@ -1,6 +1,57 @@
 from pydantic import BaseModel
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Dict
 from datetime import date
+
+
+# ======================================================================
+# STAGE-ROLE VALIDATION CONSTANTS (Per BACKEND_DATA_CONTRACT.md)
+# ======================================================================
+
+# Which role can act at each stage
+STAGE_ALLOWED_ROLE: Dict[int, str] = {
+    1: "Tribal Officer",       # Verification Pending
+    2: "District Magistrate",  # DM Approval Pending
+    3: "State Nodal Officer",  # SNO Fund Sanction Pending
+    4: "PFMS Officer",         # PFMS Fund Transfer Pending (first 25%)
+    5: "Investigation Officer", # Chargesheet Submission Pending
+    6: "PFMS Officer",         # Second Tranche Release (25-50%)
+    7: "District Magistrate",  # Judgment Pending / Final Tranche
+}
+
+# Where case goes after approval at each stage
+STAGE_NEXT_PENDING_AT: Dict[int, str] = {
+    1: "District Magistrate",  # After TO approves → DM
+    2: "State Nodal Officer",  # After DM approves → SNO
+    3: "PFMS Officer",         # After SNO sanctions → PFMS
+    4: "Investigation Officer", # After first tranche → IO for chargesheet
+    5: "PFMS Officer",         # After chargesheet → PFMS for second tranche
+    6: "District Magistrate",  # After second tranche → DM for judgment
+    7: "PFMS Officer",         # After judgment → PFMS for final tranche
+}
+
+# Event type generated at each approval stage
+STAGE_APPROVAL_EVENT: Dict[int, str] = {
+    1: "TO_APPROVED",
+    2: "DM_APPROVED",
+    3: "SNO_APPROVED",
+    4: "PFMS_FIRST_TRANCHE",
+    5: "CHARGESHEET_SUBMITTED",
+    6: "PFMS_SECOND_TRANCHE",
+    7: "DM_JUDGMENT_RECORDED",
+}
+
+# Stage descriptions for reference
+STAGE_DESCRIPTIONS: Dict[int, str] = {
+    0: "FIR Submitted (IO)",
+    1: "Verification Pending (Tribal Officer)",
+    2: "DM Approval Pending",
+    3: "SNO Approval Pending",
+    4: "First Tranche (25%) Pending",
+    5: "Chargesheet Pending",
+    6: "Second Tranche (25–50%) Pending",
+    7: "Judgment Pending / Final Tranche",
+    8: "Case Closed",
+}
 
 
 """
