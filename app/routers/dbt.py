@@ -310,6 +310,10 @@ async def submit_fir_form(
             "Location": fir_data.incident_location,
             "Date_of_Incident": fir_data.incident_date,
 
+            # Stage and Pending_At logic based on isDrafted
+            # If isDrafted=True: stays at Stage 0 (IO draft)
+            # If isDrafted=False: moves to Stage 1 (Tribal Officer pending)
+            "Stage": 0 if isDrafted else 1,
             "Pending_At": 'Investigation Officer' if isDrafted else 'Tribal Officer',
             
             # Jurisdiction fields (captured from IO's JWT token - the filing officer)
@@ -320,6 +324,7 @@ async def submit_fir_form(
         
         # Debug logging
         print(f"DEBUG: JWT Token Payload: {token_payload}")
+        print(f"DEBUG: isDrafted={isDrafted}, Stage will be set to {'0 (Draft)' if isDrafted else '1 (Submit)'}")
         print(f"DEBUG: Extracted Jurisdiction - State_UT: {token_payload.get('state_ut')}, District: {token_payload.get('district')}, PS: {token_payload.get('vishesh_p_s_name')}")
         
         # Validate data against the schema
@@ -379,7 +384,35 @@ async def submit_fir_form(
     # For simplicity, they are skipped for ATROCITY table insertion.
 
     # --- 4. Database Insertion ---
-    return insert_atrocity_case(db_payload)
+    response = insert_atrocity_case(db_payload)
+    case_no = response.get("Case_No")
+    
+    # --- 5. Insert FIR_SUBMITTED event only if final submit (not draft) ---
+    if not isDrafted:
+        event_data = {
+            "comment": "FIR submitted by Investigation Officer",
+            "is_draft": False
+        }
+        insert_case_event(
+            case_no=case_no,
+            performed_by=token_payload.get('sub'),
+            performed_by_role=token_payload.get('role'),
+            event_type="FIR_SUBMITTED",
+            event_data=event_data
+        )
+        print(f"DEBUG: FIR_SUBMITTED event inserted for case {case_no}")
+    else:
+        print(f"DEBUG: Case {case_no} saved as draft (isDrafted=True). No FIR_SUBMITTED event inserted.")
+    
+    # --- 6. Return success response with stage and pending_at info ---
+    return {
+        "case_no": case_no,
+        "fir_no": firNumber,
+        "stage": 0 if isDrafted else 1,
+        "pending_at": "Investigation Officer" if isDrafted else "Tribal Officer",
+        "is_drafted": isDrafted,
+        "message": f"FIR saved as {'draft' if isDrafted else 'submitted successfully'}. Case #{case_no} created."
+    }
 
 
 def filter_cases_by_jurisdiction(
