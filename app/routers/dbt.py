@@ -484,7 +484,7 @@ def filter_cases_by_jurisdiction(
         
         # PFMS Officer: match state AND fund release stages
         elif role == "PFMS Officer":
-            if case.State_UT == user_state and case.Stage in (4, 6, 7):
+            if case.State_UT == user_state and case.Stage in (4, 6, 7, 8):
                 filtered.append(case)
     
     return filtered
@@ -612,7 +612,7 @@ def validate_jurisdiction(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Access denied: Case is in state '{case_state}', but you are assigned to '{user_state}'"
             )
-        if case.Stage not in (4, 6, 7):
+        if case.Stage not in (4, 6, 7, 8):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"PFMS can only access cases at fund release stages (4, 6, 7). Case is at stage {case.Stage}"
