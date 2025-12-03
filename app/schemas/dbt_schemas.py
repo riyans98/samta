@@ -289,8 +289,29 @@ class CaseEvent(BaseModel):
     performed_by: str
     performed_by_role: str
     event_type: str
-    event_data: Optional[dict]
+    event_data: Optional[dict] = None
     created_at: str
+    
+    @field_validator('event_data', mode='before')
+    @classmethod
+    def parse_event_data(cls, v):
+        """Parse JSON string to dict if needed"""
+        if isinstance(v, str):
+            import json
+            try:
+                return json.loads(v)
+            except (json.JSONDecodeError, TypeError):
+                return None
+        return v
+    
+    @field_validator('created_at', mode='before')
+    @classmethod
+    def parse_created_at(cls, v):
+        """Convert datetime to ISO string if needed"""
+        from datetime import datetime
+        if isinstance(v, datetime):
+            return v.isoformat()
+        return v
 
 class AtrocityFullRecord(BaseModel):
     data: AtrocityDBModel
