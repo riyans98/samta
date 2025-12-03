@@ -383,12 +383,41 @@ async def submit_fir_form(
     # they should be stored in a separate BANK_DETAILS table or a JSON/text field.
     # For simplicity, they are skipped for ATROCITY table insertion.
 
-    # --- 4. Database Insertion ---
-    response = insert_atrocity_case(db_payload)
-    case_no = response.get("Case_No")
+    # --- 4. Check if FIR already exists (prevent duplicates) ---
+    existing_case = get_fir_data_by_fir_no(firNumber)
+    
+    if existing_case:
+        # FIR already exists - UPDATE instead of INSERT (UPSERT pattern)
+        case_no = existing_case.Case_No
+        print(f"DEBUG: FIR {firNumber} already exists as Case #{case_no}. Updating instead of inserting.")
+        
+        # Only update allowed fields to prevent overwriting sensitive data
+        update_payload = {
+            "Stage": 0 if isDrafted else 1,
+            "Pending_At": 'Investigation Officer' if isDrafted else 'Tribal Officer',
+            "Approved_By": token_payload.get('sub')
+        }
+        
+        try:
+            update_atrocity_case(case_no, update_payload)
+            print(f"DEBUG: Case #{case_no} updated successfully")
+        except Exception as e:
+            print(f"ERROR: Failed to update case {case_no}: {e}")
+            raise
+        
+        response = {"Case_No": case_no, "message": "Atrocity case updated successfully (already exists)."}
+    else:
+        # FIR doesn't exist - INSERT new record
+        response = insert_atrocity_case(db_payload)
+        case_no = response.get("Case_No")
+        print(f"DEBUG: New case #{case_no} created for FIR {firNumber}")
     
     # --- 5. Insert FIR_SUBMITTED event only if final submit (not draft) ---
-    if not isDrafted:
+    # Check if FIR_SUBMITTED event already exists for this case to prevent duplicate events
+    timeline = get_timeline(case_no)
+    fir_submitted_exists = any(event.event_type == "FIR_SUBMITTED" for event in timeline)
+    
+    if not isDrafted and not fir_submitted_exists:
         event_data = {
             "comment": "FIR submitted by Investigation Officer",
             "is_draft": False
@@ -402,7 +431,8 @@ async def submit_fir_form(
         )
         print(f"DEBUG: FIR_SUBMITTED event inserted for case {case_no}")
     else:
-        print(f"DEBUG: Case {case_no} saved as draft (isDrafted=True). No FIR_SUBMITTED event inserted.")
+        reason = "isDrafted=True" if isDrafted else "FIR_SUBMITTED event already exists"
+        print(f"DEBUG: Case {case_no} - No new FIR_SUBMITTED event inserted ({reason}).")
     
     # --- 6. Return success response with stage and pending_at info ---
     return {
@@ -411,7 +441,8 @@ async def submit_fir_form(
         "stage": 0 if isDrafted else 1,
         "pending_at": "Investigation Officer" if isDrafted else "Tribal Officer",
         "is_drafted": isDrafted,
-        "message": f"FIR saved as {'draft' if isDrafted else 'submitted successfully'}. Case #{case_no} created."
+        "is_update": existing_case is not None,
+        "message": f"FIR saved as {'draft' if isDrafted else 'submitted successfully'}. Case #{case_no} {'created' if not existing_case else 'updated'}."
     }
 
 
