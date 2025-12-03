@@ -805,7 +805,7 @@ async def release_funds(
     Tranche stages:
     - Stage 4: First 25% → Stage 5 (chargesheet pending)
     - Stage 6: Second 25-50% → Stage 7 (judgment pending)
-    - Stage 7: Final tranche → Stage 8 (case closed)
+    - Stage 8: Final tranche (after judgment recorded) → Stage 9 (case closed)
     
     Fund amounts are tracked ONLY in CASE_EVENTS (not in ATROCITY table).
     """
@@ -817,8 +817,8 @@ async def release_funds(
     # Validate jurisdiction access
     validate_jurisdiction(token_payload, case)
     
-    # PFMS Officer can release funds at stages 4, 6, 7
-    validate_role_for_action(token_payload, payload.role, case, [4, 6, 7])
+    # PFMS Officer can release funds at stages 4, 6, 8
+    validate_role_for_action(token_payload, payload.role, case, [4, 6, 8])
     
     if payload.role != "PFMS Officer":
         raise HTTPException(
@@ -838,9 +838,10 @@ async def release_funds(
         next_stage = 7
         next_pending_at = "District Collector/DM/SJO"
         tranche_label = "Second Tranche (25-50%)"
-    elif current_stage == 7:
+    elif current_stage == 8:
+        # At stage 8, final tranche release (judgment already recorded)
         event_type = "PFMS_FINAL_TRANCHE"
-        next_stage = 8
+        next_stage = 9
         next_pending_at = ""  # Case closed
         tranche_label = "Final Tranche"
     else:
@@ -948,10 +949,10 @@ async def complete_case(
     """
     Complete a case with judgment details. District Collector/DM/SJO only at stage 7.
     
-    After judgment, case moves to awaiting final tranche (stays at stage 7,
-    pending at PFMS Officer for final release).
+    After judgment is recorded, case moves to stage 8 (judgment complete).
+    PFMS Officer then confirms final tranche release at stage 8.
     
-    Note: This records the judgment. Final fund release is a separate call.
+    Transition: Stage 7 (judgment pending) → Stage 8 (judgment complete, awaiting final tranche)
     """
     # Get current case
     case = get_fir_data_by_case_no(case_no)
@@ -997,9 +998,10 @@ async def complete_case(
         event_data=event_data
     )
     
-    # Case stays at stage 7 but now awaits final tranche from PFMS
+    # Case moves to stage 8 (judgment complete) but awaits final tranche confirmation from PFMS
     update_atrocity_case(case_no, {
-        "Pending_At": "PFMS Officer",
+        "Stage": 8,
+        "Pending_At": "PFMS Officer for Final Tranche Release",
         "Approved_By": payload.actor
     })
     
@@ -1007,9 +1009,9 @@ async def complete_case(
         "message": f"Judgment recorded for case {case_no}",
         "judgment_ref": payload.judgment_ref,
         "verdict": payload.verdict,
-        "stage": 7,
-        "pending_at": "PFMS Officer",
-        "note": "Awaiting final tranche release"
+        "stage": 8,
+        "pending_at": "PFMS Officer for Final Tranche Release",
+        "note": "Case complete, awaiting final tranche release confirmation"
     }
 
 
