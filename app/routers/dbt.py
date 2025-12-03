@@ -684,7 +684,7 @@ async def approve_case(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Case stage is not set")
     
     # Validate role and stage (stages 1, 2, 3 allow approve action)
-    validate_role_for_action(token_payload, payload.role, case, [1, 2, 3])
+    validate_role_for_action(token_payload, payload.role, case, [0, 1, 2, 3])
     
     # Determine event type based on current stage
     event_type = STAGE_APPROVAL_EVENT.get(case.Stage, "APPROVED")
