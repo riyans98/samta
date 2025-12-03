@@ -78,18 +78,27 @@ def api_key_auth(x_api_key: str = Header(..., alias='X-API-Key')):
     return x_api_key
     
 # --- 3. Login Query (Moved from main.py) ---
-def execute_login_query(table_name: str, login_id: str, plain_password: str) -> Optional[Dict[str, Any]]:
+def execute_login_query(table_name: str, login_id: str, plain_password: str, role: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Queries the database for the user's stored hash and verifies the plain password against it.
     Returns the user data (minus the password hash) if successful, otherwise None.
+    
+    If role is provided, also validates that the user's role matches (security check for District_lvl_Officers table).
     """
     connection = None
     try:
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True) # Retrieve results as dictionaries
         
-        query = f"SELECT * FROM {table_name} WHERE login_id = %s"
-        cursor.execute(query, (login_id,))
+        # For District_lvl_Officers table, also search by ROLE to prevent role confusion
+        # (since both Tribal Officer and District Collector/DM/SJO use the same table)
+        if table_name == "District_lvl_Officers" and role:
+            query = f"SELECT * FROM {table_name} WHERE login_id = %s AND role = %s"
+            cursor.execute(query, (login_id, role))
+        else:
+            query = f"SELECT * FROM {table_name} WHERE login_id = %s"
+            cursor.execute(query, (login_id,))
+        
         user_data = cursor.fetchone()
 
         if not user_data:

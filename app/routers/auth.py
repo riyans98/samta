@@ -31,16 +31,23 @@ async def login_user(credentials: LoginCredentials):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role selected.")
 
     # Execute login query in security module
+    # For District_lvl_Officers, also pass the role to prevent role confusion
+    # (both Tribal Officer and District Collector/DM/SJO use this table)
     user_info: Optional[Dict[str, Any]] = execute_login_query(
         table_name, 
         credentials.login_id, 
-        credentials.password
+        credentials.password,
+        role=credentials.role if table_name == "District_lvl_Officers" else None
     )
 
     if user_info:
         # Create data payload for the token (sub = subject/login_id)
         # Keys are guaranteed to be lowercase from execute_login_query's normalization
         # Include jurisdiction fields for access control
+        
+        # IMPORTANT: Override the role from database with the role selected during login
+        # This ensures that if both DM and TO are in the same table, the user gets the role they logged in with
+        user_info['role'] = credentials.role
         
         # Extract jurisdiction fields - they should be lowercase from normalized_data
         state_ut = user_info.get('state_ut')
@@ -49,7 +56,7 @@ async def login_user(credentials: LoginCredentials):
         
         token_payload = {
             "sub": user_info['login_id'], 
-            "role": user_info['role'],
+            "role": credentials.role,  # Use the role selected during login, not DB role
             "state_ut": state_ut,
         }
         
