@@ -15,7 +15,7 @@ A case flows through multiple officers:
 
 1. **Investigation Officer (IO)** — submits FIR-linked victim data
 2. **Tribal Officer (TO)** — verifies victim & enters benefit amount
-3. **District Magistrate (DM)** — approves or sends back for correction
+3. **District Collector/DM/SJO (DM)** — approves or sends back for correction
 4. **State Nodal Officer (SNO)** — sanctions funds
 5. **PFMS Officer** — transfers DBT amount to victim
 6. **Investigation Officer** — submits chargesheet
@@ -33,7 +33,7 @@ Copilot MUST use the exact string values below:
 ```
 "Investigation Officer"
 "Tribal Officer"
-"District Magistrate"
+"District Collector/DM/SJO"
 "State Nodal Officer"
 "PFMS Officer"
 ```
@@ -216,7 +216,7 @@ Returned data includes:
 ```python
 {
   "actor": "Officer Name",
-  "role": "District Magistrate",
+  "role": "District Collector/DM/SJO",
   "next_stage": 3,
   "comment": "Approved",
   "payload": { ...optional }
@@ -227,15 +227,15 @@ Returned data includes:
 
 ```python
 {
-  "actor": "District Magistrate",
-  "role": "District Magistrate",
+  "actor": "District Collector/DM/SJO",
+  "role": "District Collector/DM/SJO",
   "comment": "Amount incorrect",
   "corrections_required": ["Fund_Ammount"]
 }
 ```
 
 **Correction Flow Rules:**
-- Only the District Magistrate can request corrections.
+- Only the District Collector/DM/SJO can request corrections.
 - Correction ALWAYS moves case from stage 2 → stage 1.
 - Tribal Officer fixes and re-approves.
 - Case NEVER returns to Investigation Officer for corrections.
@@ -278,8 +278,8 @@ Returned data includes:
 
 ```python
 {
-  "actor": "District Magistrate",
-  "role": "District Magistrate",
+  "actor": "District Collector/DM/SJO",
+  "role": "District Collector/DM/SJO",
   "judgment_ref": "CJ-8844",
   "judgment_date": "2025-05-12",
   "verdict": "Guilty",
@@ -295,12 +295,12 @@ Copilot MUST use these exact stage numbers and transitions:
 
 ```
 0 = FIR Submitted (IO) → Pending at Tribal Officer
-1 = Verification Pending (Tribal Officer) → Pending at District Magistrate
+1 = Verification Pending (Tribal Officer) → Pending at District Collector/DM/SJO
 2 = DM Approval Pending → Pending at State Nodal Officer
 3 = SNO Fund Sanction Pending → Pending at PFMS Officer
 4 = First Tranche Release Pending (PFMS) → Pending at Investigation Officer
 5 = Chargesheet Submission Pending (IO) → Pending at PFMS Officer
-6 = Second Tranche Release Pending (PFMS) → Pending at District Magistrate
+6 = Second Tranche Release Pending (PFMS) → Pending at District Collector/DM/SJO
 7 = Judgment Pending (DM) → Pending at PFMS Officer
 8 = Final Tranche Release → Case Closed
 ```
@@ -308,13 +308,13 @@ Copilot MUST use these exact stage numbers and transitions:
 ### Stage Transitions:
 - Stage 0 → 1: IO submits FIR (auto)
 - Stage 1 → 2: Tribal Officer approves
-- Stage 2 → 3: District Magistrate approves
-- Stage 2 → 1: District Magistrate requests correction (back to TO)
+- Stage 2 → 3: District Collector/DM/SJO approves
+- Stage 2 → 1: District Collector/DM/SJO requests correction (back to TO)
 - Stage 3 → 4: State Nodal Officer approves
 - Stage 4 → 5: PFMS releases First Tranche (25%)
 - Stage 5 → 6: Investigation Officer submits chargesheet
 - Stage 6 → 7: PFMS releases Second Tranche (25-50%)
-- Stage 7 → 8: District Magistrate records judgment, PFMS releases Final Tranche
+- Stage 7 → 8: District Collector/DM/SJO records judgment, PFMS releases Final Tranche
 
 ---
 
@@ -352,7 +352,7 @@ The JWT token includes jurisdiction fields:
 |------|--------------|-----------------|
 | **Investigation Officer** | Police Station | `case.Vishesh_P_S_Name == user.vishesh_p_s_name` |
 | **Tribal Officer** | District | `case.District == user.district AND case.State_UT == user.state_ut` |
-| **District Magistrate** | District | `case.District == user.district AND case.State_UT == user.state_ut` |
+| **District Collector/DM/SJO** | District | `case.District == user.district AND case.State_UT == user.state_ut` |
 | **State Nodal Officer** | State | `case.State_UT == user.state_ut` |
 | **PFMS Officer** | State + Stage | `case.State_UT == user.state_ut AND case.Stage ∈ {4, 6, 7}` |
 

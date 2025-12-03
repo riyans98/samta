@@ -47,7 +47,7 @@ Officers can **only view and act on cases within their assigned jurisdiction**.
 |------|--------------|------|
 | **Investigation Officer** | Police Station | `case.Vishesh_P_S_Name == user.vishesh_p_s_name` |
 | **Tribal Officer** | District | `case.District == user.district AND case.State_UT == user.state_ut` |
-| **District Magistrate** | District | `case.District == user.district AND case.State_UT == user.state_ut` |
+| **District Collector/DM/SJO** | District | `case.District == user.district AND case.State_UT == user.state_ut` |
 | **State Nodal Officer** | State | `case.State_UT == user.state_ut` |
 | **PFMS Officer** | State + Stage | `case.State_UT == user.state_ut AND case.Stage ∈ {4, 6, 7}` |
 
@@ -165,7 +165,7 @@ Officers can **only view and act on cases within their assigned jurisdiction**.
     "Victim_Name": "Anita",
     "Father_Name": "Ram Kumar",
     "Stage": 2,
-    "Pending_At": "District Magistrate",
+    "Pending_At": "District Collector/DM/SJO",
     "Fund_Ammount": "200000",
     "State_UT": "Madhya Pradesh",
     "District": "Jabalpur",
@@ -298,7 +298,7 @@ Officers can **only view and act on cases within their assigned jurisdiction**.
 ```json
 {
   "actor": "Officer Singh",
-  "role": "District Magistrate",
+  "role": "District Collector/DM/SJO",
   "next_stage": 3,
   "comment": "Approved - Amount verified",
   "payload": {
@@ -310,7 +310,7 @@ Officers can **only view and act on cases within their assigned jurisdiction**.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `actor` | string | ✅ | Officer name performing the action |
-| `role` | string (enum) | ✅ | Officer role: "Investigation Officer", "Tribal Officer", "District Magistrate", "State Nodal Officer", "PFMS Officer" |
+| `role` | string (enum) | ✅ | Officer role: "Investigation Officer", "Tribal Officer", "District Collector/DM/SJO", "State Nodal Officer", "PFMS Officer" |
 | `next_stage` | integer | ✅ | Target stage number (e.g., 3) |
 | `comment` | string | ❌ | Approval comment |
 | `payload` | object | ❌ | Additional metadata (stored in event_data) |
@@ -345,7 +345,7 @@ Officers can **only view and act on cases within their assigned jurisdiction**.
 
 **Authentication**: Required (JWT)
 
-**Description**: Request correction on a case. Only District Magistrate at stage 2 can do this.
+**Description**: Request correction on a case. Only District Collector/DM/SJO at stage 2 can do this.
 
 **Path Parameters**:
 - `case_no` (integer) — Case number
@@ -354,7 +354,7 @@ Officers can **only view and act on cases within their assigned jurisdiction**.
 ```json
 {
   "actor": "DM Verma",
-  "role": "District Magistrate",
+  "role": "District Collector/DM/SJO",
   "comment": "Amount needs revision - reevaluate medical proof",
   "corrections_required": [
     "Fund_Ammount",
@@ -366,7 +366,7 @@ Officers can **only view and act on cases within their assigned jurisdiction**.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `actor` | string | ✅ | Officer name |
-| `role` | string (enum) | ✅ | Must be "District Magistrate" |
+| `role` | string (enum) | ✅ | Must be "District Collector/DM/SJO" |
 | `comment` | string | ❌ | Reason for correction |
 | `corrections_required` | array[string] | ❌ | List of fields needing correction |
 
@@ -509,7 +509,7 @@ Officers can **only view and act on cases within their assigned jurisdiction**.
 
 **Authentication**: Required (JWT)
 
-**Description**: Record judgment and complete a case. District Magistrate only at stage 7.
+**Description**: Record judgment and complete a case. District Collector/DM/SJO only at stage 7.
 
 **Path Parameters**:
 - `case_no` (integer) — Case number
@@ -518,7 +518,7 @@ Officers can **only view and act on cases within their assigned jurisdiction**.
 ```json
 {
   "actor": "DM Verma",
-  "role": "District Magistrate",
+  "role": "District Collector/DM/SJO",
   "judgment_ref": "CJ-8844",
   "judgment_date": "2025-05-12",
   "verdict": "Guilty",
@@ -529,7 +529,7 @@ Officers can **only view and act on cases within their assigned jurisdiction**.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `actor` | string | ✅ | Officer name |
-| `role` | string (enum) | ✅ | Must be "District Magistrate" |
+| `role` | string (enum) | ✅ | Must be "District Collector/DM/SJO" |
 | `judgment_ref` | string | ✅ | Court judgment reference number |
 | `judgment_date` | string | ✅ | Date of judgment (YYYY-MM-DD format) |
 | `verdict` | string | ✅ | Verdict (e.g., "Guilty", "Not Guilty", "Acquitted") |
@@ -626,13 +626,13 @@ All events are logged with one of these `event_type` values:
 | `FIR_SUBMITTED` | Case filed by Investigation Officer | submit_fir endpoint |
 | `TO_APPROVED` | Tribal Officer verified & approved | approve endpoint (stage 1) |
 | `TO_CORRECTION` | Tribal Officer rejected & sent for correction | correction endpoint |
-| `DM_APPROVED` | District Magistrate approved | approve endpoint (stage 2) |
-| `DM_CORRECTION` | District Magistrate requested correction | correction endpoint |
+| `DM_APPROVED` | District Collector/DM/SJO approved | approve endpoint (stage 2) |
+| `DM_CORRECTION` | District Collector/DM/SJO requested correction | correction endpoint |
 | `SNO_APPROVED` | State Nodal Officer approved funds | approve endpoint (stage 3) |
 | `PFMS_FIRST_TRANCHE` | PFMS Officer released first 25% tranche | fund-release endpoint (stage 4) |
 | `CHARGESHEET_SUBMITTED` | Investigation Officer submitted chargesheet | chargesheet endpoint |
 | `PFMS_SECOND_TRANCHE` | PFMS Officer released second 25-50% tranche | fund-release endpoint (stage 6) |
-| `DM_JUDGMENT_RECORDED` | District Magistrate recorded judgment | complete endpoint |
+| `DM_JUDGMENT_RECORDED` | District Collector/DM/SJO recorded judgment | complete endpoint |
 | `PFMS_FINAL_TRANCHE` | PFMS Officer released final tranche | fund-release endpoint (stage 7→8) |
 
 ---
@@ -642,12 +642,12 @@ All events are logged with one of these `event_type` values:
 | Stage | Name | Pending At | Action at This Stage |
 |-------|------|-----------|----------------------|
 | 0 | FIR Submitted | Tribal Officer | TO verifies case |
-| 1 | TO Verified | District Magistrate | DM reviews & approves |
+| 1 | TO Verified | District Collector/DM/SJO | DM reviews & approves |
 | 2 | DM Approved | State Nodal Officer | SNO sanctions funds |
 | 3 | SNO Approved | PFMS Officer | PFMS releases first 25% |
 | 4 | First Tranche Released | Investigation Officer | IO submits chargesheet |
 | 5 | Chargesheet Submitted | PFMS Officer | PFMS releases second tranche |
-| 6 | Second Tranche Released | District Magistrate | DM records judgment |
+| 6 | Second Tranche Released | District Collector/DM/SJO | DM records judgment |
 | 7 | Judgment Recorded | PFMS Officer | PFMS releases final tranche |
 | 8 | Case Closed | — | Case complete |
 
@@ -659,7 +659,7 @@ All events are logged with one of these `event_type` values:
 |------|------------------|---------|
 | **Investigation Officer** | 0, 5 | File FIR (stage 0), Submit chargesheet (stage 5) |
 | **Tribal Officer** | 1 | Verify & approve (→ stage 2) or request correction |
-| **District Magistrate** | 2, 7 | Approve (→ stage 3), request correction (→ stage 1), or complete case (→ stage 7/8) |
+| **District Collector/DM/SJO** | 2, 7 | Approve (→ stage 3), request correction (→ stage 1), or complete case (→ stage 7/8) |
 | **State Nodal Officer** | 3 | Sanction funds (→ stage 4) |
 | **PFMS Officer** | 4, 6, 7 | Release first tranche (stage 4), second tranche (stage 6), or final tranche (stage 7) |
 
@@ -705,7 +705,7 @@ Event data includes:
 **403 Forbidden** (Role mismatch):
 ```json
 {
-  "detail": "Role mismatch: JWT role 'Tribal Officer' does not match payload role 'District Magistrate'"
+  "detail": "Role mismatch: JWT role 'Tribal Officer' does not match payload role 'District Collector/DM/SJO'"
 }
 ```
 
@@ -739,7 +739,7 @@ Event data includes:
 - **Role Validation**: JWT role must exactly match the role in request payload
 - **Event Auditing**: Every action is recorded with timestamp, actor, and event_data
 - **Fund Tracking**: All tranche amounts tracked in CASE_EVENTS, ATROCITY.Fund_Ammount unchanged
-- **Correction Flow**: Only the District Magistrate can request correction. Correction ALWAYS moves the case from stage 2 → stage 1. Tribal Officer handles the correction. Case NEVER returns to Investigation Officer for fund-related corrections.
+- **Correction Flow**: Only the District Collector/DM/SJO can request correction. Correction ALWAYS moves the case from stage 2 → stage 1. Tribal Officer handles the correction. Case NEVER returns to Investigation Officer for fund-related corrections.
 
 ---
 

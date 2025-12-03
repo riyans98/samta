@@ -472,7 +472,7 @@ def filter_cases_by_jurisdiction(
             if case.Vishesh_P_S_Name == user_ps:
                 filtered.append(case)
         
-        # Tribal Officer or District Magistrate: match district + state
+        # Tribal Officer or District Collector/DM/SJO: match district + state
         elif role in ("Tribal Officer", "District Collector/DM/SJO"):
             if case.State_UT == user_state and case.District == user_district:
                 filtered.append(case)
@@ -587,7 +587,7 @@ def validate_jurisdiction(
             )
         return
     
-    # Tribal Officer or District Magistrate: must match district AND state
+    # Tribal Officer or District Collector/DM/SJO: must match district AND state
     if role in ("Tribal Officer", "District Collector/DM/SJO"):
         if case_state != user_state or case_district != user_district:
             raise HTTPException(
@@ -742,10 +742,10 @@ async def request_correction(
     # Only DM at stage 2 can request correction
     validate_role_for_action(token_payload, payload.role, case, 2)
     
-    if payload.role != "District Magistrate":
+    if payload.role != "District Collector/DM/SJO":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only District Magistrate can request corrections"
+            detail="Only District Collector/DM/SJO can request corrections"
         )
     
     # Insert correction event
@@ -818,7 +818,7 @@ async def release_funds(
     elif current_stage == 6:
         event_type = "PFMS_SECOND_TRANCHE"
         next_stage = 7
-        next_pending_at = "District Magistrate"
+        next_pending_at = "District Collector/DM/SJO"
         tranche_label = "Second Tranche (25-50%)"
     elif current_stage == 7:
         event_type = "PFMS_FINAL_TRANCHE"
@@ -928,7 +928,7 @@ async def complete_case(
     token_payload: dict = Depends(verify_jwt_token)
 ):
     """
-    Complete a case with judgment details. District Magistrate only at stage 7.
+    Complete a case with judgment details. District Collector/DM/SJO only at stage 7.
     
     After judgment, case moves to awaiting final tranche (stays at stage 7,
     pending at PFMS Officer for final release).
@@ -958,10 +958,10 @@ async def complete_case(
             detail=f"Case is at stage {case.Stage}, but completion requires stage 7"
         )
     
-    if payload.role != "District Magistrate":
+    if payload.role != "District Collector/DM/SJO":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only District Magistrate can complete a case"
+            detail="Only District Collector/DM/SJO can complete a case"
         )
     
     # Insert judgment event

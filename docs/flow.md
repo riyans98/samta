@@ -36,13 +36,13 @@ This officer:
 * Confirms caste eligibility
 * Checks whether incident meets PoA/PCR relief categories
 * Decides the **initial relief amount** as per government guidelines
-* Forwards the case to the District Magistrate (DM)
+* Forwards the case to the District Collector/DM/SJO (DM)
 
 This is the first major verification checkpoint.
 
 ---
 
-## **3. District Magistrate (DM) Review + Victim Statement**
+## **3. District Collector/DM/SJO (DM) Review + Victim Statement**
 
 The **DM** is the main sanctioning authority.
 

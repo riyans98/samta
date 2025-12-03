@@ -10,22 +10,22 @@ from datetime import date, datetime
 # Which role can act at each stage
 STAGE_ALLOWED_ROLE: Dict[int, str] = {
     1: "Tribal Officer",       # Verification Pending
-    2: "District Magistrate",  # DM Approval Pending
+    2: "District Collector/DM/SJO",  # DM Approval Pending
     3: "State Nodal Officer",  # SNO Fund Sanction Pending
     4: "PFMS Officer",         # PFMS Fund Transfer Pending (first 25%)
     5: "Investigation Officer", # Chargesheet Submission Pending
     6: "PFMS Officer",         # Second Tranche Release (25-50%)
-    7: "District Magistrate",  # Judgment Pending / Final Tranche
+    7: "District Collector/DM/SJO",  # Judgment Pending / Final Tranche
 }
 
 # Where case goes after approval at each stage
 STAGE_NEXT_PENDING_AT: Dict[int, str] = {
-    1: "District Magistrate",  # After TO approves → DM
+    1: "District Collector/DM/SJO",  # After TO approves → DM
     2: "State Nodal Officer",  # After DM approves → SNO
     3: "PFMS Officer",         # After SNO sanctions → PFMS
     4: "Investigation Officer", # After first tranche → IO for chargesheet
     5: "PFMS Officer",         # After chargesheet → PFMS for second tranche
-    6: "District Magistrate",  # After second tranche → DM for judgment
+    6: "District Collector/DM/SJO",  # After second tranche → DM for judgment
     7: "PFMS Officer",         # After judgment → PFMS for final tranche
 }
 
@@ -81,7 +81,7 @@ DO NOT mix the two schemas.
 RolesType = Literal[
     "State Nodal Officer",
     "Tribal Officer",
-    "District Magistrate",
+    "District Collector/DM/SJO",
     "Investigation Officer",
     "PFMS Officer"
 ]
