@@ -213,6 +213,11 @@ class AtrocityDBModel(BaseModel):
 
     Bank_Name: Optional[str]
     created_at: Optional[str]
+    
+    # Jurisdiction fields (for access control filtering)
+    State_UT: Optional[str] = None
+    District: Optional[str] = None
+    Vishesh_P_S_Name: Optional[str] = None
 
 
 # ======================================================================

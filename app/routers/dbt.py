@@ -308,6 +308,11 @@ async def submit_fir_form(
             "Date_of_Incident": fir_data.incident_date,
 
             "Pending_At": 'Investigation Officer' if isDrafted else 'Tribal Officer',
+            
+            # Jurisdiction fields (captured from FIR data for access control)
+            "State_UT": fir_data.state,
+            "District": fir_data.district,
+            "Vishesh_P_S_Name": fir_data.police_station_name,
         }
         
         # Validate data against the schema
@@ -362,26 +367,100 @@ async def submit_fir_form(
     # --- 4. Database Insertion ---
     return insert_atrocity_case(db_payload)
 
+
+def filter_cases_by_jurisdiction(
+    cases: list[AtrocityDBModel],
+    token_payload: dict
+) -> list[AtrocityDBModel]:
+    """
+    Filters a list of cases based on user's jurisdiction.
+    
+    Rules:
+    - IO: Only cases from their police station
+    - TO/DM: Only cases from their district + state
+    - SNO: All cases from their state
+    - PFMS: Cases from their state at fund release stages (4, 6, 7)
+    """
+    role = token_payload.get("role")
+    user_state = token_payload.get("state_ut")
+    user_district = token_payload.get("district")
+    user_ps = token_payload.get("vishesh_p_s_name")
+    
+    filtered = []
+    
+    for case in cases:
+        # Investigation Officer: match police station
+        if role == "Investigation Officer":
+            if case.Vishesh_P_S_Name == user_ps:
+                filtered.append(case)
+        
+        # Tribal Officer or District Magistrate: match district + state
+        elif role in ("Tribal Officer", "District Collector/DM/SJO"):
+            if case.State_UT == user_state and case.District == user_district:
+                filtered.append(case)
+        
+        # State Nodal Officer: match state only
+        elif role == "State Nodal Officer":
+            if case.State_UT == user_state:
+                filtered.append(case)
+        
+        # PFMS Officer: match state AND fund release stages
+        elif role == "PFMS Officer":
+            if case.State_UT == user_state and case.Stage in (4, 6, 7):
+                filtered.append(case)
+    
+    return filtered
+
+
 @router.get("/get-fir-form-data", response_model=list[AtrocityDBModel])
 async def get_fir_form_data(
     pending_at: str = Query("", max_length=100),
     approved_by: str = Query("", max_length=100),
-    stage: conint(ge=0, le=10) = 0
+    stage: conint(ge=0, le=10) = 0,
+    token_payload: dict = Depends(verify_jwt_token)
 ):
-    data:list[AtrocityDBModel] = get_all_fir_data()
-    if pending_at :
+    """
+    Get all cases filtered by user's jurisdiction.
+    
+    Each officer role only sees cases within their assigned geographic area:
+    - IO: cases from their Vishesh P.S.
+    - TO/DM: cases from their district
+    - SNO: cases from their state
+    - PFMS: cases from their state at fund stages (4, 6, 7)
+    """
+    data: list[AtrocityDBModel] = get_all_fir_data()
+    
+    # Apply jurisdiction filter first
+    data = filter_cases_by_jurisdiction(data, token_payload)
+    
+    # Then apply query filters
+    if pending_at:
         data = [d for d in data if d.Pending_At == pending_at]
-    if approved_by :
+    if approved_by:
         data = [d for d in data if d.Approved_By == approved_by]
-    if stage :
+    if stage:
         data = [d for d in data if d.Stage == stage]
     return data
 
 @router.get("/get-fir-form-data/fir/{fir_no}", response_model=AtrocityFullRecord)
-async def get_fir_form_data_by_case_no(fir_no: str):
-
+async def get_fir_form_data_by_case_no(
+    fir_no: str,
+    token_payload: dict = Depends(verify_jwt_token)
+):
+    """
+    Get full case details by FIR number.
+    
+    Returns 403 if user lacks jurisdiction access to the case.
+    """
     # Get FIR data from database
     data = get_fir_data_by_fir_no(fir_no)
+    
+    if not data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    
+    # Validate jurisdiction access
+    validate_jurisdiction(token_payload, data)
+    
     docs = get_documents_by_fir_no(fir_no)
 
     return AtrocityFullRecord(
@@ -394,6 +473,72 @@ async def get_fir_form_data_by_case_no(fir_no: str):
 # ======================================================================
 # WORKFLOW ENDPOINTS (Per BACKEND_DATA_CONTRACT.md)
 # ======================================================================
+
+def validate_jurisdiction(
+    token_payload: dict,
+    case: AtrocityDBModel
+):
+    """
+    Validates that the user has jurisdiction access to the case.
+    
+    Rules:
+    - IO: case.Vishesh_P_S_Name == user.vishesh_p_s_name
+    - TO/DM: case.District == user.district AND case.State_UT == user.state_ut
+    - SNO: case.State_UT == user.state_ut (full state access)
+    - PFMS: case.State_UT == user.state_ut AND case.Stage in {4, 6, 7}
+    
+    Raises 403 if user lacks jurisdiction access.
+    """
+    role = token_payload.get("role")
+    user_state = token_payload.get("state_ut")
+    user_district = token_payload.get("district")
+    user_ps = token_payload.get("vishesh_p_s_name")
+    
+    case_state = case.State_UT
+    case_district = case.District
+    case_ps = case.Vishesh_P_S_Name
+    
+    # Investigation Officer: must match police station
+    if role == "Investigation Officer":
+        if case_ps != user_ps:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied: Case belongs to PS '{case_ps}', but you are assigned to '{user_ps}'"
+            )
+        return
+    
+    # Tribal Officer or District Magistrate: must match district AND state
+    if role in ("Tribal Officer", "District Collector/DM/SJO"):
+        if case_state != user_state or case_district != user_district:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied: Case is in {case_district}, {case_state}, but you are assigned to {user_district}, {user_state}"
+            )
+        return
+    
+    # State Nodal Officer: must match state only
+    if role == "State Nodal Officer":
+        if case_state != user_state:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied: Case is in state '{case_state}', but you are assigned to '{user_state}'"
+            )
+        return
+    
+    # PFMS Officer: must match state AND case must be at fund release stage
+    if role == "PFMS Officer":
+        if case_state != user_state:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied: Case is in state '{case_state}', but you are assigned to '{user_state}'"
+            )
+        if case.Stage not in (4, 6, 7):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"PFMS can only access cases at fund release stages (4, 6, 7). Case is at stage {case.Stage}"
+            )
+        return
+
 
 def validate_role_for_action(
     token_payload: dict, 
@@ -450,6 +595,9 @@ async def approve_case(
     case = get_fir_data_by_case_no(case_no)
     if not case:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    
+    # Validate jurisdiction access
+    validate_jurisdiction(token_payload, case)
     
     # Ensure stage is set
     if case.Stage is None:
@@ -508,6 +656,9 @@ async def request_correction(
     if not case:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
     
+    # Validate jurisdiction access
+    validate_jurisdiction(token_payload, case)
+    
     # Only DM at stage 2 can request correction
     validate_role_for_action(token_payload, payload.role, case, 2)
     
@@ -564,6 +715,9 @@ async def release_funds(
     case = get_fir_data_by_case_no(case_no)
     if not case:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    
+    # Validate jurisdiction access
+    validate_jurisdiction(token_payload, case)
     
     # PFMS Officer can release funds at stages 4, 6, 7
     validate_role_for_action(token_payload, payload.role, case, [4, 6, 7])
@@ -646,6 +800,9 @@ async def submit_chargesheet(
     if not case:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
     
+    # Validate jurisdiction access
+    validate_jurisdiction(token_payload, case)
+    
     # IO at stage 5 can submit chargesheet
     validate_role_for_action(token_payload, payload.role, case, 5)
     
@@ -702,6 +859,9 @@ async def complete_case(
     case = get_fir_data_by_case_no(case_no)
     if not case:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    
+    # Validate jurisdiction access
+    validate_jurisdiction(token_payload, case)
     
     # DM at stage 7 can complete case
     # Note: At stage 7, DM records judgment (allowed role should be DM here)
@@ -768,6 +928,9 @@ async def get_case_events(
     case = get_fir_data_by_case_no(case_no)
     if not case:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    
+    # Validate jurisdiction access
+    validate_jurisdiction(token_payload, case)
     
     events = get_timeline(case_no)
     return events

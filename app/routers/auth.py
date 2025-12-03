@@ -40,7 +40,20 @@ async def login_user(credentials: LoginCredentials):
     if user_info:
         # Create data payload for the token (sub = subject/login_id)
         # Keys are guaranteed to be lowercase from execute_login_query's normalization
-        token_payload = {"sub": user_info['login_id'], "role": user_info['role']}
+        # Include jurisdiction fields for access control
+        token_payload = {
+            "sub": user_info['login_id'], 
+            "role": user_info['role'],
+            "state_ut": user_info.get('state_ut'),
+        }
+        
+        # Add district for district-level officers (TO, DM, IO)
+        if user_info.get('district'):
+            token_payload['district'] = user_info['district']
+        
+        # Add vishesh_p_s_name for Investigation Officers
+        if user_info.get('vishesh_p_s_name'):
+            token_payload['vishesh_p_s_name'] = user_info['vishesh_p_s_name']
         
         access_token = create_access_token(
             token_payload,
