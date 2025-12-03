@@ -90,6 +90,11 @@ Applicant_Email: str | None
 
 Bank_Name: str | None
 created_at: str | None
+
+# Jurisdiction fields (for access control filtering)
+State_UT: str | None
+District: str | None
+Vishesh_P_S_Name: str | None
 ```
 
 This model MUST be used for:
@@ -323,7 +328,61 @@ Instead:
 
 ---
 
-# 11) Copilot Guidance (This Ensures Stable Autocomplete)
+# 11) Jurisdiction-Based Access Control
+
+Officers can ONLY view and act on cases within their assigned jurisdiction.
+
+### JWT Token Payload
+
+The JWT token includes jurisdiction fields:
+
+```json
+{
+  "sub": "officer_login_id",
+  "role": "District Collector/DM/SJO",
+  "state_ut": "Madhya Pradesh",
+  "district": "Jabalpur",
+  "vishesh_p_s_name": "PS Jabalpur"
+}
+```
+
+### Access Rules by Role
+
+| Role | Access Scope | Validation Rule |
+|------|--------------|-----------------|
+| **Investigation Officer** | Police Station | `case.Vishesh_P_S_Name == user.vishesh_p_s_name` |
+| **Tribal Officer** | District | `case.District == user.district AND case.State_UT == user.state_ut` |
+| **District Magistrate** | District | `case.District == user.district AND case.State_UT == user.state_ut` |
+| **State Nodal Officer** | State | `case.State_UT == user.state_ut` |
+| **PFMS Officer** | State + Stage | `case.State_UT == user.state_ut AND case.Stage ∈ {4, 6, 7}` |
+
+### How Jurisdiction is Assigned to Cases
+
+When an Investigation Officer files a new case via `POST /submit_fir`, the jurisdiction fields are automatically captured from the **IO's JWT token**:
+
+- `State_UT` ← from IO's `state_ut`
+- `District` ← from IO's `district`
+- `Vishesh_P_S_Name` ← from IO's `vishesh_p_s_name`
+
+This ensures cases are tagged with the filing officer's assigned jurisdiction.
+
+### Implementation
+
+1. **List endpoint** (`GET /get-fir-form-data`): Filters results by jurisdiction automatically
+2. **Detail endpoint** (`GET /get-fir-form-data/fir/{fir_no}`): Returns 403 if user lacks access
+3. **All workflow endpoints**: Validate jurisdiction before allowing action
+
+### Error Response (403)
+
+```json
+{
+  "detail": "Access denied: Case is in Bhopal, Madhya Pradesh, but you are assigned to Jabalpur, Madhya Pradesh"
+}
+```
+
+---
+
+# 12) Copilot Guidance (This Ensures Stable Autocomplete)
 
 ### Copilot MUST follow:
 
@@ -338,7 +397,7 @@ Instead:
 * DB first → wrapper → frontend
 * Timeline must always attach to case detail
 * **JWT role MUST match payload.role exactly** — if mismatch, return 403 Forbidden
-* Do NOT introduce any new fields in ATROCITY table
+* **Validate jurisdiction on ALL case access** — if user lacks jurisdiction, return 403 Forbidden
 * Store total approved fund ONLY in `Fund_Ammount`
 * Store all tranche releases ONLY inside `CASE_EVENTS`
 

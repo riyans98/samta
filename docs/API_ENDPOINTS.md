@@ -1,8 +1,16 @@
 # 📡 DBT Backend API Endpoints Documentation
 
+**Latest Updates** (December 3, 2025):
+- ✅ UPSERT pattern implemented in `/submit_fir` - prevents duplicate rows
+- ✅ Event deduplication - prevents duplicate FIR_SUBMITTED events
+- ✅ New response field: `is_update` indicates if case was created or updated
+- ✅ Idempotent behavior - safe retries without errors
+- ✅ Added login endpoint documentation
+
 This document lists all available API endpoints for the SIH DBT Workflow System backend.
 
-**Base URL**: `/dbt/case`
+**Base URL (DBT Endpoints)**: `/dbt/case`
+**Base URL (Auth Endpoints)**: `/` (root)
 
 ---
 
@@ -17,19 +25,54 @@ Authorization: Bearer <JWT_TOKEN>
 
 JWT token is obtained from the `/login` endpoint (in auth router).
 
+### JWT Token Payload
+The JWT token now includes jurisdiction fields for access control:
+```json
+{
+  "sub": "officer_login_id",
+  "role": "District Collector/DM/SJO",
+  "state_ut": "Madhya Pradesh",
+  "district": "Jabalpur",         // Only for district-level officers
+  "vishesh_p_s_name": "PS Jabalpur" // Only for Investigation Officers
+}
+```
+
+---
+
+## Jurisdiction-Based Access Control
+
+Officers can **only view and act on cases within their assigned jurisdiction**.
+
+| Role | Access Scope | Rule |
+|------|--------------|------|
+| **Investigation Officer** | Police Station | `case.Vishesh_P_S_Name == user.vishesh_p_s_name` |
+| **Tribal Officer** | District | `case.District == user.district AND case.State_UT == user.state_ut` |
+| **District Magistrate** | District | `case.District == user.district AND case.State_UT == user.state_ut` |
+| **State Nodal Officer** | State | `case.State_UT == user.state_ut` |
+| **PFMS Officer** | State + Stage | `case.State_UT == user.state_ut AND case.Stage ∈ {4, 6, 7}` |
+
+**Error Response (403 Forbidden)**:
+```json
+{
+  "detail": "Access denied: Case is in Bhopal, Madhya Pradesh, but you are assigned to Jabalpur, Madhya Pradesh"
+}
+```
+
 ---
 
 ## 1. Case Submission & Retrieval (Pre-existing)
 
-### 1.1 Submit FIR Form
+### 1.1 Submit FIR Form (with UPSERT Pattern)
 **Endpoint**: `POST /submit_fir`
 
 **Authentication**: Required (JWT)
 
-**Description**: Investigation Officer submits a new FIR with case details and documents.
+**Description**: Investigation Officer submits a new FIR or updates existing draft. Uses UPSERT pattern:
+- If FIR doesn't exist → Creates new case (INSERT)
+- If FIR exists → Updates existing case (UPDATE) - prevents duplicate rows
 
 **Query Parameters**:
-- `isDrafted` (boolean, default=false) — If true, case goes to Investigation Officer as draft; if false, goes to Tribal Officer
+- `isDrafted` (boolean, default=false) — If true, case stays at Stage 0 (IO draft); if false, moves to Stage 1 (Tribal Officer)
 
 **Form Data (multipart/form-data)**:
 
@@ -49,17 +92,51 @@ JWT token is obtained from the `/login` endpoint (in auth router).
 | `bankName` | string | ✅ | Bank name |
 | `firDocument` | file | ✅ | FIR document (PDF/JPG/PNG) |
 
-**Response** (201 Created):
+**Response** (201 Created - New Case):
 ```json
 {
-  "Case_No": 5,
-  "message": "Atrocity case filed successfully."
+  "case_no": 5,
+  "fir_no": "FIR-2025-001",
+  "stage": 1,
+  "pending_at": "Tribal Officer",
+  "is_drafted": false,
+  "is_update": false,
+  "message": "FIR saved as submitted successfully. Case #5 created."
 }
 ```
+
+**Response** (201 Created - Existing Case Updated):
+```json
+{
+  "case_no": 5,
+  "fir_no": "FIR-2025-001",
+  "stage": 1,
+  "pending_at": "Tribal Officer",
+  "is_drafted": false,
+  "is_update": true,
+  "message": "FIR saved as submitted successfully. Case #5 updated."
+}
+```
+
+**Response Fields**:
+- `case_no` — Case number (same if update, new if create)
+- `fir_no` — FIR number
+- `stage` — Current workflow stage (0 for draft, 1 for submit)
+- `pending_at` — Who the case is pending with
+- `is_drafted` — Whether case is still a draft
+- `is_update` — **NEW**: true if existing case was updated, false if new case created
+- `message` — Status message
+
+**UPSERT Behavior**:
+- **First submission**: Creates new row (is_update=false)
+- **Re-submission with same FIR**: Updates existing row (is_update=true), prevents duplicates
+- **Same request on retry**: Idempotent - same result both times, no error
+- **Event deduplication**: FIR_SUBMITTED event only inserted once, even if submitted multiple times
 
 **Error Responses**:
 - `400` — Validation error or invalid file type
 - `401` — Missing or invalid JWT token
+- `403` — Jurisdiction violation (IO not assigned to this police station)
 - `404` — Aadhaar or FIR data not found
 - `500` — Database or server error
 
@@ -68,9 +145,11 @@ JWT token is obtained from the `/login` endpoint (in auth router).
 ### 1.2 Get All Cases
 **Endpoint**: `GET /get-fir-form-data`
 
-**Authentication**: Not required
+**Authentication**: Required (JWT)
 
-**Description**: Retrieve all FIR cases with optional filtering.
+**Description**: Retrieve all FIR cases filtered by user's jurisdiction, with optional additional filters.
+
+**Jurisdiction Filtering**: Results are automatically filtered based on the authenticated user's role and assigned location (state, district, or police station).
 
 **Query Parameters**:
 - `pending_at` (string, optional) — Filter by who case is pending with (e.g., "Tribal Officer")
@@ -88,12 +167,16 @@ JWT token is obtained from the `/login` endpoint (in auth router).
     "Stage": 2,
     "Pending_At": "District Magistrate",
     "Fund_Ammount": "200000",
+    "State_UT": "Madhya Pradesh",
+    "District": "Jabalpur",
+    "Vishesh_P_S_Name": "PS Jabalpur",
     ...
   }
 ]
 ```
 
 **Error Responses**:
+- `401` — Missing or invalid JWT token
 - `500` — Database query error
 
 ---
@@ -101,9 +184,11 @@ JWT token is obtained from the `/login` endpoint (in auth router).
 ### 1.3 Get Full Case Details with Timeline
 **Endpoint**: `GET /get-fir-form-data/fir/{fir_no}`
 
-**Authentication**: Not required
+**Authentication**: Required (JWT)
 
-**Description**: Retrieve complete case record with documents and event timeline.
+**Description**: Retrieve complete case record with documents and event timeline. Returns 403 if user lacks jurisdiction access.
+
+**Jurisdiction Check**: User must have jurisdiction access to the case (see Jurisdiction-Based Access Control section).
 
 **Path Parameters**:
 - `fir_no` (string) — FIR number (e.g., FIR-2025-001)
@@ -120,6 +205,9 @@ JWT token is obtained from the `/login` endpoint (in auth router).
     "Pending_At": "State Nodal Officer",
     "Fund_Ammount": "200000",
     "Bank_Name": "State Bank Of India",
+    "State_UT": "Madhya Pradesh",
+    "District": "Jabalpur",
+    "Vishesh_P_S_Name": "PS Jabalpur",
     ...
   },
   "documents": {
@@ -155,6 +243,42 @@ JWT token is obtained from the `/login` endpoint (in auth router).
 **Error Responses**:
 - `404` — FIR not found
 - `500` — Database error
+
+---
+
+## Authentication Endpoints
+
+### Login
+**Endpoint**: `POST /login`
+
+**Description**: Authenticate user and obtain JWT token with jurisdiction fields.
+
+**Request Body** (JSON):
+```json
+{
+  "login_id": "officer_123",
+  "password": "password123",
+  "role": "Investigation Officer"
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer",
+  "login_id": "officer_123",
+  "role": "Investigation Officer",
+  "state_ut": "Jharkhand",
+  "district": "Ranchi",
+  "vishesh_p_s_name": "Ranchi_PS"
+}
+```
+
+**Error Responses**:
+- `401` — Invalid login ID or password for selected role
+- `400` — Invalid role selected
+- `500` — Server error
 
 ---
 
@@ -619,8 +743,16 @@ Event data includes:
 
 ---
 
-**Last Updated**: December 2, 2025  
-**API Version**: 1.0  
-**Document Version**: 1.0
+**Last Updated**: December 3, 2025
+**API Version**: 1.1
+**Document Version**: 1.1
+
+### Recent Changes (v1.1)
+- ✅ UPSERT pattern for `/submit_fir` to prevent duplicate rows
+- ✅ Event deduplication in CASE_EVENTS table
+- ✅ New `is_update` response field for clarity
+- ✅ Added login endpoint (from auth router)
+- ✅ Comprehensive testing guide for duplicate row scenarios
+- ✅ Idempotent behavior documented
 
 
