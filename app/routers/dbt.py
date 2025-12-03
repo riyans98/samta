@@ -667,7 +667,7 @@ async def approve_case(
     Approve a case and move it to the next stage.
     
     Allowed transitions:
-    - Stage 1 (TO verifies) → Stage 2 (DM pending)
+    - Stage 1 (TO verifies) → Stage 2 (DM pending) [TO can set fund_amount here]
     - Stage 2 (DM approves) → Stage 3 (SNO pending)
     - Stage 3 (SNO sanctions) → Stage 4 (PFMS pending)
     """
@@ -695,6 +695,12 @@ async def approve_case(
         "next_stage": payload.next_stage,
         **(payload.payload or {})
     }
+    
+    # For Tribal Officer at stage 1: include fund_amount in event_data if provided
+    if payload.role == "Tribal Officer" and case.Stage == 1 and payload.fund_amount:
+        event_data["fund_amount"] = payload.fund_amount
+        event_data["fund_type"] = "Allowance Fund"
+    
     insert_case_event(
         case_no=case_no,
         performed_by=payload.actor,
@@ -704,19 +710,31 @@ async def approve_case(
     )
     
     # Update case stage and pending_at
-    next_pending_at = STAGE_NEXT_PENDING_AT.get(case.Stage, "")
-    update_atrocity_case(case_no, {
+    update_payload = {
         "Stage": payload.next_stage,
-        "Pending_At": next_pending_at,
+        "Pending_At": STAGE_NEXT_PENDING_AT.get(case.Stage, ""),
         "Approved_By": payload.actor
-    })
+    }
     
-    return {
+    # For Tribal Officer at stage 1: update Fund_Ammount in ATROCITY table if fund_amount provided
+    if payload.role == "Tribal Officer" and case.Stage == 1 and payload.fund_amount:
+        update_payload["Fund_Ammount"] = payload.fund_amount
+    
+    update_atrocity_case(case_no, update_payload)
+    
+    response = {
         "message": f"Case {case_no} approved successfully",
         "new_stage": payload.next_stage,
-        "pending_at": next_pending_at,
+        "pending_at": STAGE_NEXT_PENDING_AT.get(case.Stage, ""),
         "event_type": event_type
     }
+    
+    # Include fund_amount in response if it was set
+    if payload.fund_amount:
+        response["fund_amount"] = payload.fund_amount
+        response["fund_type"] = "Allowance Fund"
+    
+    return response
 
 
 @router.post("/{case_no}/correction", status_code=status.HTTP_200_OK)

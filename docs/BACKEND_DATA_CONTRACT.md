@@ -214,6 +214,7 @@ Returned data includes:
 ### Approve
 
 ```python
+# General approval (DM, SNO, PFMS)
 {
   "actor": "Officer Name",
   "role": "District Collector/DM/SJO",
@@ -221,7 +222,23 @@ Returned data includes:
   "comment": "Approved",
   "payload": { ...optional }
 }
+
+# Tribal Officer approval with fund amount (Stage 1)
+{
+  "actor": "Officer Singh",
+  "role": "Tribal Officer",
+  "next_stage": 2,
+  "comment": "Verified - eligible for relief",
+  "fund_amount": 200000,
+  "payload": {}
+}
 ```
+
+**Tribal Officer Fund Amount Logic:**
+- At stage 1, Tribal Officer can set `fund_amount` (allowance fund)
+- This updates ATROCITY.Fund_Ammount field in the database
+- Fund amount is also recorded in CASE_EVENTS with event_type "TO_APPROVED"
+- This amount is used for all subsequent tranche calculations
 
 ### Correction
 

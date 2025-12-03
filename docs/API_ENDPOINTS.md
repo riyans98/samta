@@ -289,7 +289,7 @@ Officers can **only view and act on cases within their assigned jurisdiction**.
 
 **Authentication**: Required (JWT)
 
-**Description**: Approve a case and move it to the next stage.
+**Description**: Approve a case and move it to the next stage. Tribal Officer can set the allowance fund amount at stage 1.
 
 **Path Parameters**:
 - `case_no` (integer) — Case number
@@ -301,6 +301,7 @@ Officers can **only view and act on cases within their assigned jurisdiction**.
   "role": "District Collector/DM/SJO",
   "next_stage": 3,
   "comment": "Approved - Amount verified",
+  "fund_amount": 200000,
   "payload": {
     "optional_key": "optional_value"
   }
@@ -313,21 +314,25 @@ Officers can **only view and act on cases within their assigned jurisdiction**.
 | `role` | string (enum) | ✅ | Officer role: "Investigation Officer", "Tribal Officer", "District Collector/DM/SJO", "State Nodal Officer", "PFMS Officer" |
 | `next_stage` | integer | ✅ | Target stage number (e.g., 3) |
 | `comment` | string | ❌ | Approval comment |
+| `fund_amount` | float | ❌ | Allowance fund amount to set (Tribal Officer only at stage 1) |
 | `payload` | object | ❌ | Additional metadata (stored in event_data) |
 
 **Approve Logic**:
 - Stage 0: IO submits FIR → auto Stage 1
-- Stage 1 (TO approve) → Stage 2
+- Stage 1 (TO approve with fund_amount) → Stage 2 (sets Fund_Ammount in ATROCITY table)
 - Stage 2 (DM approve) → Stage 3
 - Stage 3 (SNO approve) → Stage 4
 
-**Response** (200 OK):
+**Response** (200 OK - with fund_amount):
 ```json
 {
   "message": "Case 5 approved successfully",
-  "new_stage": 3,
-  "pending_at": "State Nodal Officer",
-  "event_type": "DM_APPROVED"
+  "new_stage": 2,
+  "pending_at": "District Collector/DM/SJO",
+  "event_type": "TO_APPROVED",
+  "fund_amount": 200000,
+  "fund_type": "Allowance Fund"
+}
 }
 ```
 

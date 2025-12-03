@@ -241,6 +241,7 @@ class ApprovalPayload(BaseModel):
     role: RolesType
     next_stage: int
     comment: Optional[str] = None
+    fund_amount: Optional[float] = None  # For Tribal Officer to set allowance fund amount at stage 1
     payload: Optional[dict] = None
 
 

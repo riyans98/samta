@@ -205,14 +205,14 @@ def insert_case_event(
 def update_atrocity_case(case_no: int, updates: Dict[str, Any]) -> bool:
     """
     Updates specified fields in the ATROCITY table for a given case.
-    Only updates Stage, Pending_At, Approved_By fields (workflow-related).
+    Only updates Stage, Pending_At, Approved_By, Fund_Ammount fields (workflow-related).
     Returns True if update was successful.
     """
     if not updates:
         return False
     
     # Only allow workflow-related field updates
-    allowed_fields = {'Stage', 'Pending_At', 'Approved_By'}
+    allowed_fields = {'Stage', 'Pending_At', 'Approved_By', 'Fund_Ammount'}
     filtered_updates = {k: v for k, v in updates.items() if k in allowed_fields}
     
     if not filtered_updates:
