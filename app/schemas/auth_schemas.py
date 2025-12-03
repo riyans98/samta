@@ -9,7 +9,8 @@ RolesType = Literal[
     "State Nodal Officer",
     "Tribal Officer",
     "District Collector/DM/SJO",
-    "Investigation Officer"
+    "Investigation Officer",
+    "PFMS Officer"
 ]
 
 class BaseOfficer(BaseModel):
@@ -24,6 +25,13 @@ class StateNodalOfficer(BaseOfficer):
 
 class DistrictLvlOfficer(BaseOfficer):
     district: str = Field(..., max_length=100)
+
+class PFMSOfficer(DistrictLvlOfficer):
+    """
+    PFMS Officer - operates at district level for fund release operations.
+    Inherits district field from DistrictLvlOfficer.
+    """
+    pass
 
 class VisheshThanaOfficer(DistrictLvlOfficer):
     # By default, FastAPI Pydantic field names ko use karta hai. 

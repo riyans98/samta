@@ -1,9 +1,9 @@
 # app/routers/admin.py
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, HTTPException
 
 from app.core.security import api_key_auth, hash_password
 from app.db.session import execute_insert
-from app.schemas.auth_schemas import StateNodalOfficer, DistrictLvlOfficer, VisheshThanaOfficer
+from app.schemas.auth_schemas import StateNodalOfficer, DistrictLvlOfficer, VisheshThanaOfficer, PFMSOfficer
 
 # Admin router, secured by the api_key_auth dependency at the router level
 router = APIRouter(
@@ -26,9 +26,38 @@ async def create_state_nodal_officer(
 
 @router.post("/district_lvl_officers", status_code=status.HTTP_201_CREATED)
 async def create_district_lvl_officer(
-    officer: DistrictLvlOfficer, 
+    officer_data: dict, 
     key: str = Depends(api_key_auth)
 ):
+    """
+    Register district-level officers: Tribal Officer, District Collector/DM/SJO, or PFMS Officer.
+    
+    For Tribal Officer / District Collector / PFMS Officer:
+    - role: "Tribal Officer", "District Collector/DM/SJO", or "PFMS Officer"
+    - district: Required (district name for all three roles)
+    """
+    role = officer_data.get("role")
+    
+    # Validate role
+    if role not in ["Tribal Officer", "District Collector/DM/SJO", "PFMS Officer"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid role for district_lvl_officers. Allowed: Tribal Officer, District Collector/DM/SJO, PFMS Officer"
+        )
+    
+    # District is required for all three roles
+    if not officer_data.get("district"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"District is required for {role}"
+        )
+    
+    # Create schema based on role
+    if role == "PFMS Officer":
+        officer = PFMSOfficer(**officer_data)
+    else:
+        officer = DistrictLvlOfficer(**officer_data)
+    
     hashed_pass = hash_password(officer.password)
     return execute_insert("District_lvl_Officers", officer.model_dump(), hashed_pass)
 

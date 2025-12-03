@@ -22,7 +22,8 @@ async def login_user(credentials: LoginCredentials):
         "State Nodal Officer": "State_Nodal_Officers",
         "Tribal Officer": "District_lvl_Officers",
         "District Collector/DM/SJO": "District_lvl_Officers",
-        "Investigation Officer": "Vishesh_Thana_Officers"
+        "Investigation Officer": "Vishesh_Thana_Officers",
+        "PFMS Officer": "District_lvl_Officers"
     }
     
     table_name = role_to_table.get(credentials.role)
@@ -32,7 +33,7 @@ async def login_user(credentials: LoginCredentials):
 
     # Execute login query in security module
     # For District_lvl_Officers, also pass the role to prevent role confusion
-    # (both Tribal Officer and District Collector/DM/SJO use this table)
+    # (Tribal Officer, District Collector/DM/SJO, and PFMS Officer all use this table)
     user_info: Optional[Dict[str, Any]] = execute_login_query(
         table_name, 
         credentials.login_id, 
