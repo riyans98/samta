@@ -1,6 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List, Literal, Dict
-from datetime import date
+from datetime import date, datetime
 
 
 # ======================================================================
@@ -175,49 +175,61 @@ class AtrocityDBModel(BaseModel):
     """
 
     Case_No: int
-    FIR_NO: Optional[str]
-    Victim_Name: Optional[str]
-    Father_Name: Optional[str]
-    Victim_DOB: Optional[str]
-    Gender: Optional[str]
-    Victim_Mobile_No: Optional[str]
-    Aadhar_No: Optional[int]
-    Caste: Optional[str]
-    Caste_Certificate_No: Optional[str]
-    Applied_Acts: Optional[str]
-    Case_Description: Optional[str]
-    Victim_Image_No: Optional[str]
-    Location: Optional[str]
-    Date_of_Incident: Optional[str]
+    FIR_NO: Optional[str] = None
+    Victim_Name: Optional[str] = None
+    Father_Name: Optional[str] = None
+    Victim_DOB: Optional[str] = None
+    Gender: Optional[str] = None
+    Victim_Mobile_No: Optional[str] = None
+    Aadhar_No: Optional[int] = None
+    Caste: Optional[str] = None
+    Caste_Certificate_No: Optional[str] = None
+    Applied_Acts: Optional[str] = None
+    Case_Description: Optional[str] = None
+    Victim_Image_No: Optional[str] = None
+    Location: Optional[str] = None
+    Date_of_Incident: Optional[str] = None
 
-    Medical_Report_Image: Optional[str]
-    Passbook_Image: Optional[str]
+    Medical_Report_Image: Optional[str] = None
+    Passbook_Image: Optional[str] = None
 
-    Bank_Account_No: Optional[str]
-    IFSC_Code: Optional[str]
-    Holder_Name: Optional[str]
+    Bank_Account_No: Optional[str] = None
+    IFSC_Code: Optional[str] = None
+    Holder_Name: Optional[str] = None
 
-    Stage: Optional[int]
-    Fund_Type: Optional[str]
-    Fund_Ammount: Optional[str]
-    Pending_At: Optional[str]
-    Approved_By: Optional[str]
+    Stage: Optional[int] = None
+    Fund_Type: Optional[str] = None
+    Fund_Ammount: Optional[str] = None
+    Pending_At: Optional[str] = None
+    Approved_By: Optional[str] = None
 
-    Limit_Delayed: Optional[int]
-    Reason_for_Delay: Optional[str]
+    Limit_Delayed: Optional[int] = None
+    Reason_for_Delay: Optional[str] = None
 
-    Applicant_Name: Optional[str]
-    Applicant_Relation: Optional[str]
-    Applicant_Mobile_No: Optional[str]
-    Applicant_Email: Optional[str]
+    Applicant_Name: Optional[str] = None
+    Applicant_Relation: Optional[str] = None
+    Applicant_Mobile_No: Optional[str] = None
+    Applicant_Email: Optional[str] = None
 
-    Bank_Name: Optional[str]
-    created_at: Optional[str]
+    Bank_Name: Optional[str] = None
+    created_at: Optional[str] = None
     
     # Jurisdiction fields (for access control filtering)
     State_UT: Optional[str] = None
     District: Optional[str] = None
     Vishesh_P_S_Name: Optional[str] = None
+    
+    @field_validator('Victim_DOB', 'Date_of_Incident', 'created_at', mode='before')
+    @classmethod
+    def convert_dates_to_string(cls, v):
+        """Convert date/datetime objects to ISO format strings"""
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            return v.isoformat()
+        if isinstance(v, date):
+            return v.isoformat()
+        return str(v) if v else None
 
 
 # ======================================================================

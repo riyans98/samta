@@ -203,6 +203,9 @@ def insert_atrocity_case(data: Dict[str, Any]):
         connection = get_dbt_db_connection()
         cursor = connection.cursor()
         
+        # Debug: Log what's being inserted
+        print(f"DEBUG insert_atrocity_case: State_UT={data.get('State_UT')}, District={data.get('District')}, Vishesh_P_S_Name={data.get('Vishesh_P_S_Name')}")
+        
         # Prepare data for insertion (Pydantic model ke field names)
         columns = ", ".join(data.keys())
         placeholders = ", ".join(["%s"] * len(data))
@@ -309,11 +312,15 @@ async def submit_fir_form(
 
             "Pending_At": 'Investigation Officer' if isDrafted else 'Tribal Officer',
             
-            # Jurisdiction fields (captured from FIR data for access control)
-            "State_UT": fir_data.state,
-            "District": fir_data.district,
-            "Vishesh_P_S_Name": fir_data.police_station_name,
+            # Jurisdiction fields (captured from IO's JWT token - the filing officer)
+            "State_UT": token_payload.get('state_ut'),
+            "District": token_payload.get('district'),
+            "Vishesh_P_S_Name": token_payload.get('vishesh_p_s_name'),
         }
+        
+        # Debug logging
+        print(f"DEBUG: JWT Token Payload: {token_payload}")
+        print(f"DEBUG: Extracted Jurisdiction - State_UT: {token_payload.get('state_ut')}, District: {token_payload.get('district')}, PS: {token_payload.get('vishesh_p_s_name')}")
         
         # Validate data against the schema
         case_data = AtrocityBase(**input_data)
@@ -356,6 +363,13 @@ async def submit_fir_form(
     db_payload['Caste_Certificate_No'] = caste_cert_name
     db_payload['Medical_Report_Image'] = medical_report_name
     db_payload['Victim_Image_No'] = photo_name
+    
+    # Add jurisdiction fields from JWT token
+    db_payload['State_UT'] = token_payload.get('state_ut')
+    db_payload['District'] = token_payload.get('district')
+    db_payload['Vishesh_P_S_Name'] = token_payload.get('vishesh_p_s_name')
+    
+    print(f"DEBUG: Final DB Payload - State_UT: {db_payload.get('State_UT')}, District: {db_payload.get('District')}, PS: {db_payload.get('Vishesh_P_S_Name')}")
     
     # Note: Passbook_Image is missing from the form, we'll assume it's blank for now.
     db_payload['Passbook_Image'] = "" 
@@ -412,7 +426,7 @@ def filter_cases_by_jurisdiction(
     return filtered
 
 
-@router.get("/get-fir-form-data", response_model=list[AtrocityDBModel])
+@router.get("/get-fir-form-data")
 async def get_fir_form_data(
     pending_at: str = Query("", max_length=100),
     approved_by: str = Query("", max_length=100),
@@ -440,7 +454,9 @@ async def get_fir_form_data(
         data = [d for d in data if d.Approved_By == approved_by]
     if stage:
         data = [d for d in data if d.Stage == stage]
-    return data
+    
+    # Return as list of dicts for proper JSON serialization
+    return [d.model_dump() for d in data]
 
 @router.get("/get-fir-form-data/fir/{fir_no}", response_model=AtrocityFullRecord)
 async def get_fir_form_data_by_case_no(

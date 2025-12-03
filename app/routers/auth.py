@@ -41,19 +41,28 @@ async def login_user(credentials: LoginCredentials):
         # Create data payload for the token (sub = subject/login_id)
         # Keys are guaranteed to be lowercase from execute_login_query's normalization
         # Include jurisdiction fields for access control
+        
+        # Extract jurisdiction fields - they should be lowercase from normalized_data
+        state_ut = user_info.get('state_ut')
+        district = user_info.get('district')
+        vishesh_p_s_name = user_info.get('vishesh_p_s_name')
+        
         token_payload = {
             "sub": user_info['login_id'], 
             "role": user_info['role'],
-            "state_ut": user_info.get('state_ut'),
+            "state_ut": state_ut,
         }
         
         # Add district for district-level officers (TO, DM, IO)
-        if user_info.get('district'):
-            token_payload['district'] = user_info['district']
+        if district:
+            token_payload['district'] = district
         
         # Add vishesh_p_s_name for Investigation Officers
-        if user_info.get('vishesh_p_s_name'):
-            token_payload['vishesh_p_s_name'] = user_info['vishesh_p_s_name']
+        if vishesh_p_s_name:
+            token_payload['vishesh_p_s_name'] = vishesh_p_s_name
+        
+        # Debug log (remove in production)
+        print(f"JWT Token Payload: {token_payload}")
         
         access_token = create_access_token(
             token_payload,
@@ -72,4 +81,12 @@ async def login_user(credentials: LoginCredentials):
 @router.get("/user/me")
 async def get_current_user(token_payload: dict = Depends(verify_jwt_token)):
     """Fetches current user info. Requires valid JWT token."""
-    return {"message": "Authenticated user data.", "user_id": token_payload.get("sub"), "role": token_payload.get("role")}
+    return {
+        "message": "Authenticated user data.",
+        "user_id": token_payload.get("sub"),
+        "role": token_payload.get("role"),
+        "state_ut": token_payload.get("state_ut"),
+        "district": token_payload.get("district"),
+        "vishesh_p_s_name": token_payload.get("vishesh_p_s_name"),
+        "full_payload": token_payload
+    }
