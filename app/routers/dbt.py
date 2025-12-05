@@ -2,9 +2,11 @@
 import shutil
 import os
 import re
+import base64
 from fastapi import APIRouter, HTTPException, Query, status, Depends, UploadFile, File, Form
 from typing import Dict, Any, Optional
 from pydantic import ValidationError, conint
+from app.db.govt_session import get_fir_by_number, get_aadhaar_by_number
 
 from app.core.config import settings
 from app.core.security import verify_jwt_token # Protection
@@ -34,7 +36,6 @@ from app.schemas.dbt_schemas import (
     STAGE_NEXT_PENDING_AT,
     STAGE_APPROVAL_EVENT
 )
-from app.db.govt_session import get_fir_by_number, get_aadhaar_by_number
 
 router = APIRouter(
     prefix="/dbt/case",
@@ -46,11 +47,6 @@ router = APIRouter(
 
 # File names ko DB mein store karne ke liye ek helper function
 # app/routers/dbt.py (save_uploaded_file function ko replace karein)
-
-import os
-import shutil
-import base64
-from fastapi import UploadFile, HTTPException, status
 
 def get_mime_type(filename: str) -> str:
     """Get MIME type based on file extension"""
