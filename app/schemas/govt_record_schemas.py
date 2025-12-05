@@ -3,6 +3,7 @@ from typing import Optional
 from datetime import date, time, datetime
 
 # Aadhaar Model
+# table name = aadhaar_records
 class AadhaarRecord(BaseModel):
 
     def __init__(self, **data):
@@ -27,6 +28,7 @@ class AadhaarRecord(BaseModel):
     status: str
 
 # FIR Model
+# table name = fir_records
 class FIRRecord(BaseModel):
 
     def __init__(self, **data):
@@ -65,3 +67,46 @@ class FIRRecord(BaseModel):
     investigating_officer: str
     case_status: str
     last_update: Optional[datetime] = None
+
+# Caste Certificate Model
+# table name = caste_certificates
+# constraints :
+    # CONSTRAINT fk_caste_cert_aadhaar FOREIGN KEY (aadhaar_number)
+    #     REFERENCES aadhaar_records(aadhaar_id) ON DELETE RESTRICT ON UPDATE CASCADE
+class CasteCertificate(BaseModel):
+    certificate_id: str                 # VARCHAR(32)
+    aadhaar_number: int                 # BIGINT -> use int in Python
+    person_name: str                    # person_name (VARCHAR)
+    caste_category: str                 # e.g., 'SC','ST','OBC','General'
+    caste_name: Optional[str] = None    # sub-caste / tribe name
+    issue_date: Optional[date] = None
+    issuing_authority: Optional[str] = None
+    verification_date: Optional[date] = None
+    certificate_status: Optional[str] = None   # active, pending, expired, etc.
+    remarks: Optional[str] = None
+
+# NPCI Bank KYC
+# table name = npci_bank_kyc
+# constraints :
+    # CONSTRAINT fk_npci_primary_aadhaar FOREIGN KEY (primary_aadhaar)
+    #     REFERENCES aadhaar_records(aadhaar_id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    # CONSTRAINT fk_npci_secondary_aadhaar FOREIGN KEY (secondary_aadhaar)
+    #     REFERENCES aadhaar_records(aadhaar_id) ON DELETE RESTRICT ON UPDATE CASCADE
+class NPCIBankKYC(BaseModel):
+    kyc_id: str                         # VARCHAR(32)
+    account_number: str                 # VARCHAR(32)
+    account_type: Optional[str] = None  # 'JOINT', 'SAVINGS', etc.
+    
+    primary_holder_name: str
+    primary_aadhaar: int
+    primary_caste_category: Optional[str] = None
+
+    secondary_holder_name: Optional[str] = None
+    secondary_aadhaar: Optional[int] = None
+    secondary_caste_category: Optional[str] = None
+
+    bank_name: Optional[str] = None
+    ifsc_code: Optional[str] = None
+    kyc_status: Optional[str] = None        # verified, pending, rejected
+    kyc_completed_on: Optional[date] = None
+    remarks: Optional[str] = None
