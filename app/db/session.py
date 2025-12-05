@@ -210,6 +210,30 @@ def get_fir_data_by_fir_no(fir_no: str) -> AtrocityDBModel:
         cursor.close()
         connection.close()
 
+
+def get_atrocity_cases_by_aadhaar(aadhaar_number: int) -> list[AtrocityDBModel]:
+    """
+    Fetch all atrocity cases for a given Aadhaar number.
+    Returns list of cases with all details (same as /get-fir-form-data).
+    """
+    connection = get_dbt_db_connection()
+    try:
+        cursor = connection.cursor(dictionary=True)
+        query = "SELECT * FROM ATROCITY WHERE Aadhar_No = %s"
+        cursor.execute(query, (aadhaar_number,))
+        data = cursor.fetchall()
+        if data:
+            return [AtrocityDBModel(**row) for row in data]
+        return []
+    except Error as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database query failed: {e}"
+        )
+    finally:
+        cursor.close()
+        connection.close()
+
 def get_timeline(case_no: int) -> List[CaseEvent]:
     conn = get_dbt_db_connection()
     try:

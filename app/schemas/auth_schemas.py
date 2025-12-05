@@ -1,5 +1,5 @@
 # app/schemas/auth_schemas.py
-from datetime import datetime
+from datetime import date, datetime
 from pydantic import BaseModel, EmailStr, Field
 from typing import Literal, Optional
 
@@ -101,3 +101,30 @@ class CitizenUserResponse(BaseModel):
 class CitizenLoginResponse(CitizenUserResponse):
     """Response model for citizen login with JWT token."""
     access_token: str
+
+
+# Citizen Data with Aadhaar Info
+class AadhaarDataResponse(BaseModel):
+    """Aadhaar data fetched from govt database."""
+    aadhaar_id: int
+    full_name: str
+    father_name: str
+    dob: date
+    gender: str
+    address_line1: str
+    address_line2: Optional[str] = None
+    district: str
+    state: str
+    pincode: str
+    mobile: str
+    email: Optional[EmailStr] = None
+    enrollment_date: date
+    last_update: Optional[datetime] = None
+    mobile_verified: bool
+    email_verified: bool
+    status: str
+
+
+class CitizenDataWithAadhaar(CitizenUserResponse):
+    """Citizen user data enriched with Aadhaar information."""
+    aadhaar_data: Optional[AadhaarDataResponse] = None

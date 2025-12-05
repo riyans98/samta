@@ -15,7 +15,8 @@ from app.db.session import (
     get_fir_data_by_case_no,
     get_timeline,
     insert_case_event,
-    update_atrocity_case
+    update_atrocity_case,
+    get_atrocity_cases_by_aadhaar
 )
 from app.schemas.dbt_schemas import (
     AtrocityBase, 
@@ -548,6 +549,34 @@ async def get_fir_form_data_by_case_no(
         documents=docs,
         events=get_timeline(data.Case_No)
     )
+
+
+@router.get("/get-fir-form-data/aadhaar/{aadhaar_number}", tags=["DBT Case Management"])
+async def get_fir_form_data_by_aadhaar(
+    aadhaar_number: int,
+    token_payload: dict = Depends(verify_jwt_token)
+):
+    """
+    Get all atrocity cases for a given Aadhaar number.
+    Citizen can only see their own cases (aadhaar_number must match their token).
+    Returns same structure as /get-fir-form-data.
+    """
+    # For citizens, validate they can only access their own Aadhaar
+    citizen_aadhaar = token_payload.get("aadhaar_number")
+    if citizen_aadhaar and citizen_aadhaar != aadhaar_number:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only access cases for your own Aadhaar number"
+        )
+    
+    # Fetch all cases for this Aadhaar
+    data: list[AtrocityDBModel] = get_atrocity_cases_by_aadhaar(aadhaar_number)
+    
+    if not data:
+        return []
+    
+    # Return as list of dicts for proper JSON serialization
+    return [d.model_dump() for d in data]
 
 
 # ======================================================================
