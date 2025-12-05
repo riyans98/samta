@@ -4,8 +4,9 @@ from datetime import timedelta
 from typing import Dict, Any, Optional
 
 from app.core.config import settings
-from app.core.security import create_access_token, execute_login_query, verify_jwt_token
-from app.schemas.auth_schemas import LoginCredentials, Token, Officer, OfficerResponse, RolesType
+from app.core.security import create_access_token, execute_login_query, verify_jwt_token, verify_password
+from app.schemas.auth_schemas import LoginCredentials, Token, Officer, OfficerResponse, RolesType, CitizenLoginCredentials, CitizenLoginResponse
+from app.db.session import get_citizen_by_login_id
 
 # Router object banane se hum is file ko main app se alag kar sakte hain
 router = APIRouter(
@@ -98,3 +99,60 @@ async def get_current_user(token_payload: dict = Depends(verify_jwt_token)):
         "vishesh_p_s_name": token_payload.get("vishesh_p_s_name"),
         "full_payload": token_payload
     }
+
+
+# ======================== CITIZEN LOGIN ========================
+
+@router.post("/citizen/login", response_model=CitizenLoginResponse)
+async def citizen_login(credentials: CitizenLoginCredentials):
+    """
+    Authenticates a citizen user using login_id and password.
+    Returns user data with JWT token on successful authentication.
+    """
+    # Fetch citizen user from database
+    citizen_data = get_citizen_by_login_id(credentials.login_id)
+    
+    if not citizen_data:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Login ID or Password."
+        )
+    
+    # Verify password against stored hash
+    stored_hash = citizen_data.get('password_hash')
+    
+    if not stored_hash or not verify_password(credentials.password, stored_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Login ID or Password."
+        )
+    
+    # Create JWT token payload for citizen
+    token_payload = {
+        "sub": citizen_data['login_id'],
+        "role": "citizen",
+        "citizen_id": citizen_data['citizen_id'],
+        "aadhaar_number": citizen_data['aadhaar_number'],
+    }
+    
+    # Generate JWT token
+    access_token = create_access_token(
+        token_payload,
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    
+    # Build response with user data (excluding password_hash)
+    response_data = {
+        "citizen_id": citizen_data['citizen_id'],
+        "login_id": citizen_data['login_id'],
+        "aadhaar_number": citizen_data['aadhaar_number'],
+        "caste_certificate_id": citizen_data.get('caste_certificate_id'),
+        "full_name": citizen_data['full_name'],
+        "mobile_number": citizen_data['mobile_number'],
+        "email": citizen_data.get('email'),
+        "created_at": citizen_data.get('created_at'),
+        "updated_at": citizen_data.get('updated_at'),
+        "access_token": access_token
+    }
+    
+    return response_data

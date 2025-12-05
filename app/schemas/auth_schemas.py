@@ -76,3 +76,28 @@ class CitizenUser(BaseModel):
 
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+# Citizen Login Schemas
+class CitizenLoginCredentials(BaseModel):
+    """Model for citizen login request."""
+    login_id: str
+    password: str
+
+
+class CitizenUserResponse(BaseModel):
+    """Response model for citizen user data (without password_hash)."""
+    citizen_id: int
+    login_id: str
+    aadhaar_number: int
+    caste_certificate_id: Optional[str] = None
+    full_name: str
+    mobile_number: str
+    email: Optional[EmailStr] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class CitizenLoginResponse(CitizenUserResponse):
+    """Response model for citizen login with JWT token."""
+    access_token: str

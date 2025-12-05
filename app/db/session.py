@@ -2,7 +2,7 @@
 import mysql.connector
 from mysql.connector import Error
 from fastapi import HTTPException, status
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 # CONFIGS ko .env se load karna
 from app.core.config import settings
 # app/db/session.py (Extended)
@@ -118,6 +118,37 @@ def execute_update_users(id: int, hash: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
             detail=f"Database insertion failed: {e}"
+        )
+    finally:
+        if connection and connection.is_connected() and cursor:
+            cursor.close()
+            connection.close()
+
+
+def get_citizen_by_login_id(login_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Fetches citizen user data by login_id from citizen_users table.
+    Returns all user data including password_hash for verification.
+    """
+    connection = None
+    cursor = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        
+        query = "SELECT * FROM citizen_users WHERE login_id = %s"
+        cursor.execute(query, (login_id,))
+        result = cursor.fetchone()
+        
+        if result:
+            # Normalize keys to lowercase for consistency
+            return {k.lower(): v for k, v in result.items()}
+        return None
+    except Error as e:
+        print(f"Database Error fetching citizen: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database query failed: {e}"
         )
     finally:
         if connection and connection.is_connected() and cursor:
