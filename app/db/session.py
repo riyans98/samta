@@ -3,7 +3,6 @@ import mysql.connector
 from mysql.connector import Error
 from fastapi import HTTPException, status
 from typing import Dict, Any, List
-
 # CONFIGS ko .env se load karna
 from app.core.config import settings
 # app/db/session.py (Extended)
@@ -99,6 +98,32 @@ def execute_insert(table_name: str, data: Dict[str, Any], hashed_password: str):
 
 # execute_login_query ko auth_service.py/security.py mein move karna behtar hai 
 # kyunki usme bcrypt aur password logic hai, jo ki DB se zyada security/business logic hai.
+
+
+def execute_update_users(id: int, hash: str): 
+    connection = None
+    cursor = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        table_name = 'citizen_users'
+
+        query = f"UPDATE {table_name} SET password_hash = '{hash}' WHERE citizen_id = {id}"
+        cursor.execute(query)
+        connection.commit()
+
+        return {"message": f"Data updated successfully into {table_name}"}
+    except Error as e:
+        print(f"Database Error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Database insertion failed: {e}"
+        )
+    finally:
+        if connection and connection.is_connected() and cursor:
+            cursor.close()
+            connection.close()
+
 
 def get_all_fir_data() -> list[AtrocityDBModel]:
     connection = get_dbt_db_connection()

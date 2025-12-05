@@ -1,5 +1,6 @@
 # app/schemas/auth_schemas.py
-from pydantic import BaseModel, Field
+from datetime import datetime
+from pydantic import BaseModel, EmailStr, Field
 from typing import Literal, Optional
 
 # Base Model
@@ -58,3 +59,20 @@ class Officer(BaseModel):
 
 class OfficerResponse(Officer, Token):
     pass
+
+# table name = citizen_users
+class CitizenUser(BaseModel):
+    citizen_id: Optional[int] = None          # AUTO_INCREMENT, returned from DB
+
+    login_id: str
+    password_hash: str
+
+    aadhaar_number: int
+    caste_certificate_id: Optional[str] = None
+
+    full_name: str
+    mobile_number: str
+    email: Optional[EmailStr] = None
+
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
