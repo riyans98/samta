@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, status, HTTPException
 
 from app.core.security import api_key_auth, hash_password
 from app.db.session import execute_insert, execute_update_users
-from app.schemas.auth_schemas import StateNodalOfficer, DistrictLvlOfficer, VisheshThanaOfficer, PFMSOfficer
+from app.schemas.auth_schemas import StateNodalOfficer, DistrictLvlOfficer, VisheshThanaOfficer, PFMSOfficer, RolesType
 
 # Admin router, secured by the api_key_auth dependency at the router level
 router = APIRouter(
@@ -39,7 +39,14 @@ async def create_district_lvl_officer(
     role = officer_data.get("role")
     
     # Validate role
-    if role not in ["Tribal Officer", "District Collector/DM/SJO", "PFMS Officer"]:
+    if role not in [
+    "State Nodal Officer",
+    "Tribal Officer",
+    "District Collector/DM/SJO",
+    "Investigation Officer",
+    "PFMS Officer",
+    "ADM"
+]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid role for district_lvl_officers. Allowed: Tribal Officer, District Collector/DM/SJO, PFMS Officer"

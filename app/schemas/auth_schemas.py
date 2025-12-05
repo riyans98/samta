@@ -11,7 +11,8 @@ RolesType = Literal[
     "Tribal Officer",
     "District Collector/DM/SJO",
     "Investigation Officer",
-    "PFMS Officer"
+    "PFMS Officer",
+    "ADM"
 ]
 
 class BaseOfficer(BaseModel):
