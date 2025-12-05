@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     
     # File Upload Directory
     UPLOAD_DIR: str = "uploaded_files"
+    
+    # ICM Configuration
+    ICM_GRANT_AMOUNT: int = 250000  # Rs 2.5 Lakh grant for inter-caste marriage
 
     class Config:
         env_file = ".env"

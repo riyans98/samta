@@ -11,12 +11,30 @@ from app.services.dbt_service import (
 )
 
 from app.services.icm_service import (
-    get_user_icm_applications,
     create_icm_application,
     approve_icm_application,
     reject_icm_application,
-    get_icm_applications_by_jurisdiction,
-    request_icm_correction
+    request_icm_correction,
+    pfms_release,
+    append_icm_event
+)
+
+from app.services.icm_utils import (
+    ROLE_CITIZEN, ROLE_ADM, ROLE_TO, ROLE_DM, ROLE_SNO, ROLE_PFMS,
+    OFFICER_ROLES,
+    STAGE_SUBMITTED, STAGE_COMPLETED,
+    assert_jurisdiction,
+    validate_role_for_stage,
+    get_next_stage,
+    get_pending_at_for_stage,
+    get_event_type,
+    validate_applicant_is_partner,
+    check_duplicate_couple
+)
+
+from app.services.icm_storage import (
+    save_icm_file,
+    get_icm_documents
 )
 
 __all__ = [
@@ -28,10 +46,24 @@ __all__ = [
     "request_correction_workflow",
     "get_all_cases_for_user",
     # ICM Services
-    "get_user_icm_applications",
     "create_icm_application",
     "approve_icm_application",
     "reject_icm_application",
-    "get_icm_applications_by_jurisdiction",
     "request_icm_correction",
+    "pfms_release",
+    "append_icm_event",
+    # ICM Utils
+    "ROLE_CITIZEN", "ROLE_ADM", "ROLE_TO", "ROLE_DM", "ROLE_SNO", "ROLE_PFMS",
+    "OFFICER_ROLES",
+    "STAGE_SUBMITTED", "STAGE_COMPLETED",
+    "assert_jurisdiction",
+    "validate_role_for_stage",
+    "get_next_stage",
+    "get_pending_at_for_stage",
+    "get_event_type",
+    "validate_applicant_is_partner",
+    "check_duplicate_couple",
+    # ICM Storage
+    "save_icm_file",
+    "get_icm_documents",
 ]

@@ -199,12 +199,12 @@ def get_icm_events_by_application(icm_id: int) -> List[ICMEvent]:
         icm_id: Application ID
     
     Returns:
-        List of ICMEvent records
+        List of ICMEvent records (sorted ascending by created_at for chronological timeline)
     """
     connection = get_dbt_db_connection()
     try:
         cursor = connection.cursor(dictionary=True)
-        query = "SELECT * FROM icm_events WHERE icm_id = %s ORDER BY created_at DESC"
+        query = "SELECT * FROM icm_events WHERE icm_id = %s ORDER BY created_at ASC"
         cursor.execute(query, (icm_id,))
         results = cursor.fetchall()
         
