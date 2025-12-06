@@ -25,7 +25,8 @@ async def login_user(credentials: LoginCredentials):
         "Tribal Officer": "District_lvl_Officers",
         "District Collector/DM/SJO": "District_lvl_Officers",
         "Investigation Officer": "Vishesh_Thana_Officers",
-        "PFMS Officer": "District_lvl_Officers"
+        "PFMS Officer": "District_lvl_Officers",
+        "ADM": "District_lvl_Officers"
     }
     
     table_name = role_to_table.get(credentials.role)

@@ -193,7 +193,7 @@ async def submit_icm_application(
         
         # Marriage
         "marriage_date": marriage_date,
-        "marriage_certificate_number": marriage_certificate_number,
+        "marriage_cert_number": marriage_certificate_number,
         "previous_benefit_taken": previous_benefit_taken,
         
         # Witness
@@ -210,7 +210,7 @@ async def submit_icm_application(
     
     # Prepare files dictionary
     files = {
-        "marriage_certificate": marriage_certificate,
+        "marriage_cert_file": marriage_certificate,
         "groom_signature": groom_signature,
         "bride_signature": bride_signature,
         "witness_signature": witness_signature
