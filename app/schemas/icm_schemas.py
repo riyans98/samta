@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Any, Dict, Optional
 from datetime import date, datetime
 
@@ -8,6 +8,7 @@ class ICMApplication(BaseModel):
     Pydantic model representing an application in the ICM system,
     aligned with the icm_applications SQL table.
     """
+    model_config = ConfigDict(populate_by_name=True)
 
     # --- Primary/Applicant Details ---
     icm_id: int                                   
@@ -50,8 +51,8 @@ class ICMApplication(BaseModel):
 
     # --- Marriage Details ---
     marriage_date: date
-    marriage_certificate_number: Optional[str] = None
-    marriage_certificate_file: Optional[str] = None
+    marriage_certificate_number: Optional[str] = Field(default=None, alias='marriage_cert_number')
+    marriage_certificate_file: Optional[str] = Field(default=None, alias='marriage_cert_file')
     previous_benefit_taken: Optional[bool] = False 
 
     # --- File Uploads ---

@@ -181,13 +181,19 @@ def get_icm_documents(icm_id: int) -> Dict[str, List[Dict[str, Any]]]:
     
     try:
         # Pattern: ICM{icm_id}_{uploader}_{TYPE}.{ext}
-        pattern = rf"ICM{icm_id}_[^_]+_([A-Z_]+)\.[a-zA-Z0-9]+"
+        # Example: ICM2_citizen_12_GROOM_SIGN.png (uploader can have underscores like citizen_12)
+        # Matches: ICM2_<anything>_<DOCUMENT_TYPE>.ext
+        # Using non-greedy .+? to handle multiple underscores correctly
+        pattern = rf"ICM{icm_id}_.+?_([A-Z_]+)\.[a-zA-Z0-9]+"
         
         for filename in os.listdir(upload_dir):
             match = re.match(pattern, filename)
             if match:
                 file_type = match.group(1)
                 file_path = os.path.join(upload_dir, filename)
+                
+                # Debug log
+                logger.debug(f"Found ICM file: {filename}, type: {file_type}")
                 
                 try:
                     # Read file and encode as base64
