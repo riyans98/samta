@@ -209,7 +209,16 @@ def get_icm_events_by_application(icm_id: int) -> List[ICMEvent]:
         results = cursor.fetchall()
         
         if results:
-            return [ICMEvent(**row) for row in results]
+            events = []
+            for row in results:
+                # Parse event_data from JSON string to dict if it's a string
+                if row.get('event_data') and isinstance(row['event_data'], str):
+                    try:
+                        row['event_data'] = json.loads(row['event_data'])
+                    except (json.JSONDecodeError, TypeError):
+                        row['event_data'] = None
+                events.append(ICMEvent(**row))
+            return events
         return []
     except Error as e:
         raise HTTPException(
