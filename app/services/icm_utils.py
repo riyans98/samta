@@ -3,7 +3,7 @@
 ICM Utility Functions
 
 Provides validation, jurisdiction checks, and role-stage mapping for ICM workflow.
-Uses ONLY these DB roles: "Citizen", "ADM", "Tribal Officer", "District Collector/DM/SJO", 
+Uses ONLY these DB roles: "Citizen", "Tribal Officer", "District Collector/DM/SJO", 
 "State Nodal Officer", "PFMS Officer"
 """
 
@@ -19,57 +19,51 @@ logger = logging.getLogger(__name__)
 
 # ======================== ROLE & STAGE CONSTANTS ========================
 
-# Official DB Roles (ONLY these 6 roles)
+# Official DB Roles (ONLY these 5 roles)
 ROLE_CITIZEN = "Citizen"
-ROLE_ADM = "ADM"
 ROLE_TO = "Tribal Officer"
 ROLE_DM = "District Collector/DM/SJO"
 ROLE_SNO = "State Nodal Officer"
 ROLE_PFMS = "PFMS Officer"
 
 # All valid officer roles
-OFFICER_ROLES = [ROLE_ADM, ROLE_TO, ROLE_DM, ROLE_SNO, ROLE_PFMS]
+OFFICER_ROLES = [ROLE_TO, ROLE_DM, ROLE_SNO, ROLE_PFMS]
 
-# Stage flow: 0 → 1 → 2 → 3 → 4 → 5 → 6
-# Stage 0: Submitted (Citizen) → pending_at: ADM
-# Stage 1: ADM Approved → pending_at: Tribal Officer
-# Stage 2: TO Approved → pending_at: District Collector/DM/SJO
-# Stage 3: DM Approved → pending_at: State Nodal Officer
-# Stage 4: SNO Approved → pending_at: PFMS Officer
-# Stage 5: PFMS Fund Released → pending_at: COMPLETED
-# Stage 6: Completed (final)
+# Stage flow: 0 → 1 → 2 → 3 → 4 → 5
+# Stage 0: Submitted (Citizen) → pending_at: Tribal Officer
+# Stage 1: TO Approved → pending_at: District Collector/DM/SJO
+# Stage 2: DM Approved → pending_at: State Nodal Officer
+# Stage 3: SNO Approved → pending_at: PFMS Officer
+# Stage 4: PFMS Fund Released → pending_at: COMPLETED
+# Stage 5: Completed (final)
 
 STAGE_SUBMITTED = 0
-STAGE_ADM_APPROVED = 1
-STAGE_TO_APPROVED = 2
-STAGE_DM_APPROVED = 3
-STAGE_SNO_APPROVED = 4
-STAGE_PFMS_RELEASED = 5
-STAGE_COMPLETED = 6
+STAGE_TO_APPROVED = 1
+STAGE_DM_APPROVED = 2
+STAGE_SNO_APPROVED = 3
+STAGE_PFMS_RELEASED = 4
+STAGE_COMPLETED = 5
 
 # Role → allowed stage to act on
 ROLE_STAGE_MAP = {
-    ROLE_ADM: STAGE_SUBMITTED,      # ADM acts on stage 0
-    ROLE_TO: STAGE_ADM_APPROVED,    # TO acts on stage 1
-    ROLE_DM: STAGE_TO_APPROVED,     # DM acts on stage 2
-    ROLE_SNO: STAGE_DM_APPROVED,    # SNO acts on stage 3
-    ROLE_PFMS: STAGE_SNO_APPROVED,  # PFMS acts on stage 4
+    ROLE_TO: STAGE_SUBMITTED,       # TO acts on stage 0
+    ROLE_DM: STAGE_TO_APPROVED,     # DM acts on stage 1
+    ROLE_SNO: STAGE_DM_APPROVED,    # SNO acts on stage 2
+    ROLE_PFMS: STAGE_SNO_APPROVED,  # PFMS acts on stage 3
 }
 
 # Stage → next stage after approval
 NEXT_STAGE_MAP = {
-    STAGE_SUBMITTED: STAGE_ADM_APPROVED,      # 0 → 1
-    STAGE_ADM_APPROVED: STAGE_TO_APPROVED,    # 1 → 2
-    STAGE_TO_APPROVED: STAGE_DM_APPROVED,     # 2 → 3
-    STAGE_DM_APPROVED: STAGE_SNO_APPROVED,    # 3 → 4
-    STAGE_SNO_APPROVED: STAGE_PFMS_RELEASED,  # 4 → 5
-    STAGE_PFMS_RELEASED: STAGE_COMPLETED,     # 5 → 6
+    STAGE_SUBMITTED: STAGE_TO_APPROVED,       # 0 → 1
+    STAGE_TO_APPROVED: STAGE_DM_APPROVED,     # 1 → 2
+    STAGE_DM_APPROVED: STAGE_SNO_APPROVED,    # 2 → 3
+    STAGE_SNO_APPROVED: STAGE_PFMS_RELEASED,  # 3 → 4
+    STAGE_PFMS_RELEASED: STAGE_COMPLETED,     # 4 → 5
 }
 
 # Stage → pending_at role
 STAGE_PENDING_AT_MAP = {
-    STAGE_SUBMITTED: ROLE_ADM,
-    STAGE_ADM_APPROVED: ROLE_TO,
+    STAGE_SUBMITTED: ROLE_TO,
     STAGE_TO_APPROVED: ROLE_DM,
     STAGE_DM_APPROVED: ROLE_SNO,
     STAGE_SNO_APPROVED: ROLE_PFMS,
@@ -79,7 +73,6 @@ STAGE_PENDING_AT_MAP = {
 
 # Event type mapping by role
 EVENT_TYPE_MAP = {
-    ROLE_ADM: {"approve": "ADM_APPROVED", "correction": "ADM_CORRECTION"},
     ROLE_TO: {"approve": "TO_APPROVED", "correction": "TO_CORRECTION"},
     ROLE_DM: {"approve": "DM_APPROVED", "correction": "DM_CORRECTION", "reject": "DM_REJECTED"},
     ROLE_SNO: {"approve": "SNO_APPROVED", "correction": "SNO_CORRECTION"},
@@ -140,7 +133,7 @@ def assert_jurisdiction(token_payload: Dict[str, Any], application: Any) -> None
         return
     
     # Officer jurisdiction checks
-    if role in [ROLE_ADM, ROLE_TO, ROLE_DM]:
+    if role in [ROLE_TO, ROLE_DM]:
         # District-level officers: must match both state AND district
         if app_state != user_state or app_district != user_district:
             logger.warning(f"Jurisdiction denied: role={role}, user_district={user_district}, app_district={app_district}")

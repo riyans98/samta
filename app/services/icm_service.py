@@ -3,8 +3,8 @@
 ICM (Inter-Caste Marriage) Service Layer
 
 Business logic for ICM application management with proper workflow:
-- Stage flow: 0 → 1 → 2 → 3 → 4 → 5 → 6 (Completed)
-- Roles: Citizen, ADM, Tribal Officer, District Collector/DM/SJO, State Nodal Officer, PFMS Officer
+- Stage flow: 0 → 1 → 2 → 3 → 4 → 5 (Completed)
+- Roles: Citizen, Tribal Officer, District Collector/DM/SJO, State Nodal Officer, PFMS Officer
 - Every action creates an event
 - Centralized jurisdiction checks
 """
@@ -24,7 +24,7 @@ from app.db.icm_session import (
 )
 from app.schemas.icm_schemas import ICMApplication
 from app.services.icm_utils import (
-    ROLE_CITIZEN, ROLE_ADM, ROLE_TO, ROLE_DM, ROLE_SNO, ROLE_PFMS,
+    ROLE_CITIZEN, ROLE_TO, ROLE_DM, ROLE_SNO, ROLE_PFMS,
     OFFICER_ROLES,
     STAGE_SUBMITTED, STAGE_COMPLETED,
     ROLE_STAGE_MAP, NEXT_STAGE_MAP, STAGE_PENDING_AT_MAP, EVENT_TYPE_MAP,
@@ -112,19 +112,19 @@ def get_icm_applications_by_jurisdiction(
         List of filtered applications
     """
     all_applications = get_all_icm_applications()
-    
+
     filtered = []
     for app in all_applications:
         # Filter by state
-        if app.state_ut != state_ut:
+        if app.state_ut.lower() != state_ut.lower():
             continue
         
         # Filter by district if provided
-        if district and app.district != district:
+        if district and app.district.lower() != district.lower():
             continue
         
         # Filter by pending_at if provided
-        if pending_at and app.pending_at != pending_at:
+        if pending_at and app.pending_at.lower() != pending_at.lower():
             continue
         
         filtered.append(app.model_dump())
@@ -183,7 +183,7 @@ async def create_icm_application_with_files(
     application_data['state_ut'] = token_payload.get("state_ut", "")
     application_data['district'] = token_payload.get("district", "")
     application_data['current_stage'] = STAGE_SUBMITTED  # 0
-    application_data['pending_at'] = ROLE_ADM  # ADM
+    application_data['pending_at'] = ROLE_TO  # Tribal Officer (TO)
     application_data['application_status'] = 'Pending'
     
     try:
@@ -247,7 +247,7 @@ async def create_icm_application_with_files(
             "status": "created",
             "message": "ICM application created successfully",
             "current_stage": STAGE_SUBMITTED,
-            "pending_at": ROLE_ADM
+            "pending_at": ROLE_TO
         }
         
     except HTTPException:
@@ -289,7 +289,7 @@ def create_icm_application(application_data: Dict[str, Any]) -> Dict[str, Any]:
             "status": "created",
             "message": "ICM application created successfully",
             "current_stage": STAGE_SUBMITTED,
-            "pending_at": ROLE_ADM
+            "pending_at": ROLE_TO
         }
     except Exception as e:
         raise HTTPException(
@@ -587,12 +587,12 @@ def pfms_release(
     PFMS fund release action - completes the ICM application.
     
     Validates:
-    - Current stage must be 4 (SNO approved, pending PFMS)
+    - Current stage must be 3 (SNO approved, pending PFMS)
     - Amount should match configured grant (default 250000)
     - Role must be PFMS Officer
     
     Actions:
-    - Sets stage to 5 then 6 (Completed)
+    - Sets stage to 4 then 5 (Completed)
     - Sets application_status='Completed'
     - Sets pending_at='COMPLETED'
     - Creates PFMS_FUND_RELEASED event
@@ -627,11 +627,11 @@ def pfms_release(
             detail="Only PFMS Officer can release funds"
         )
     
-    # Validate current stage (must be 4 - pending PFMS)
-    if application.current_stage != 4:  # STAGE_SNO_APPROVED
+    # Validate current stage (must be 3 - pending PFMS)
+    if application.current_stage != 3:  # STAGE_SNO_APPROVED
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Application must be at stage 4 for fund release. Current stage: {application.current_stage}"
+            detail=f"Application must be at stage 3 for fund release. Current stage: {application.current_stage}"
         )
     
     # Validate amount (warning only, don't block)

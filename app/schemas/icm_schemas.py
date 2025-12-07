@@ -79,7 +79,7 @@ class ICMApplication(BaseModel):
 
     # --- Workflow ---
     current_stage: int = 0                        
-    pending_at: str = 'ADM'                       
+    pending_at: str = 'Tribal Officer'                       
     application_status: str = 'Pending'           
 
     # --- Timestamps ---

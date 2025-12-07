@@ -5,8 +5,8 @@ ICM (Inter-Caste Marriage) Routes
 API endpoints for Inter-Caste Marriage applications.
 Supports multipart form data for file uploads.
 
-Roles: Citizen, ADM, Tribal Officer, District Collector/DM/SJO, State Nodal Officer, PFMS Officer
-Stage Flow: 0 → 1 → 2 → 3 → 4 → 5 → 6 (Completed)
+Roles: Citizen, Tribal Officer, District Collector/DM/SJO, State Nodal Officer, PFMS Officer
+Stage Flow: 0 → 1 → 2 → 3 → 4 → 5 (Completed)
 Documents: MARRIAGE, GROOM_SIGN, BRIDE_SIGN, WITNESS_SIGN
 """
 
@@ -30,7 +30,7 @@ from app.services.icm_service import (
     get_application_documents
 )
 from app.services.icm_utils import (
-    ROLE_CITIZEN, ROLE_ADM, ROLE_TO, ROLE_DM, ROLE_SNO, ROLE_PFMS,
+    ROLE_CITIZEN, ROLE_TO, ROLE_DM, ROLE_SNO, ROLE_PFMS,
     OFFICER_ROLES,
     assert_jurisdiction
 )
@@ -256,12 +256,15 @@ async def get_citizen_applications(
             # Use officer's state from token
             state_ut = token_payload.get("state_ut")
         
+        if not district:
+            # Use officer's state from token
+            district = token_payload.get("district")
+        
         if not state_ut:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="state_ut parameter required for officer queries"
             )
-        
         applications = get_icm_applications_by_jurisdiction(
             state_ut=state_ut,
             district=district,
@@ -592,7 +595,7 @@ async def approve_application(
     Approve an ICM application and move to next stage.
     
     Stage Flow:
-    - Stage 0: ADM approves → Stage 1 (Tribal Officer)
+    - Stage 0: Application submitted → Stage 1 (Tribal Officer)
     - Stage 1: Tribal Officer approves → Stage 2 (DM)
     - Stage 2: DM approves → Stage 3 (SNO)
     - Stage 3: SNO approves → Stage 4 (PFMS)

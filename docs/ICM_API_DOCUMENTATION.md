@@ -7,31 +7,29 @@ The ICM module handles Inter-Caste Marriage incentive scheme applications. It su
 ### Grant Amount
 - **₹2,50,000** (Rs. Two Lakh Fifty Thousand)
 
-### Roles (6 DB Roles)
+### Roles (5 DB Roles)
 | Role | Description |
 |------|-------------|
 | `Citizen` | Applicant (must be groom OR bride) |
-| `ADM` | Additional District Magistrate - First reviewer |
-| `Tribal Officer` | Second level reviewer |
-| `District Collector/DM/SJO` | Third level reviewer (can reject) |
-| `State Nodal Officer` | Fourth level reviewer |
+| `Tribal Officer` | First level reviewer |
+| `District Collector/DM/SJO` | Second level reviewer (can reject) |
+| `State Nodal Officer` | Third level reviewer |
 | `PFMS Officer` | Final approver - releases funds |
 
 ### Stage Flow
 ```
-Stage 0 → Stage 1 → Stage 2 → Stage 3 → Stage 4 → Stage 5 → Stage 6
-(Submit)   (ADM)     (TO)      (DM)      (SNO)    (PFMS)   (Complete)
+Stage 0 → Stage 1 → Stage 2 → Stage 3 → Stage 4 → Stage 5
+(Submit)   (TO)      (DM)      (SNO)    (PFMS)   (Complete)
 ```
 
 | Stage | Status | Pending At | Action By |
 |-------|--------|------------|-----------|
-| 0 | Submitted | ADM | Citizen submits |
-| 1 | ADM Approved | Tribal Officer | ADM approves |
-| 2 | TO Approved | District Collector/DM/SJO | Tribal Officer approves |
-| 3 | DM Approved | State Nodal Officer | DM approves |
-| 4 | SNO Approved | PFMS Officer | SNO approves |
-| 5 | PFMS Released | Completed | PFMS releases funds |
-| 6 | Completed | - | Final state |
+| 0 | Submitted | Tribal Officer | Citizen submits |
+| 1 | TO Approved | District Collector/DM/SJO | Tribal Officer approves |
+| 2 | DM Approved | State Nodal Officer | DM approves |
+| 3 | SNO Approved | PFMS Officer | SNO approves |
+| 4 | PFMS Released | Completed | PFMS releases funds |
+| 5 | Completed | - | Final state |
 
 ### Documents (4 Files)
 | Document Type | Key | Required |
@@ -187,7 +185,7 @@ const response = await fetch('/icm/applications', {
 {
   "icm_id": 123,
   "current_stage": 0,
-  "pending_at": "ADM",
+  "pending_at": "Tribal Officer",
   "application_status": "Submitted",
   "message": "ICM application submitted successfully",
   "files_saved": ["MARRIAGE", "GROOM_SIGN", "BRIDE_SIGN"]
@@ -242,7 +240,7 @@ const response = await fetch('/icm/applications', {
 });
 
 // Officer - get applications in jurisdiction
-const response = await fetch('/icm/applications?state_ut=Delhi&pending_at=ADM', {
+const response = await fetch('/icm/applications?state_ut=Delhi&pending_at=Tribal Officer', {
   headers: { 'Authorization': `Bearer ${token}` }
 });
 ```
@@ -470,17 +468,16 @@ Returns a fully rendered HTML page with:
 
 **Description:** Approve an ICM application and move to next stage.
 
-**Access:** Officers only (ADM, Tribal Officer, DM, SNO)
+**Access:** Officers only (Tribal Officer, DM, SNO, PFMS)
 
-> **Note:** PFMS Officer should use `/pfms/release` endpoint instead.
+> **Note:** This endpoint handles approvals for stages 0-3. For final PFMS fund release, use `/pfms/release` endpoint instead.
 
 #### Stage Transitions on Approval
 | Current Stage | Role | Next Stage | Next Pending At |
 |---------------|------|------------|-----------------|
-| 0 | ADM | 1 | Tribal Officer |
-| 1 | Tribal Officer | 2 | District Collector/DM/SJO |
-| 2 | District Collector/DM/SJO | 3 | State Nodal Officer |
-| 3 | State Nodal Officer | 4 | PFMS Officer |
+| 0 | Tribal Officer | 1 | District Collector/DM/SJO |
+| 1 | District Collector/DM/SJO | 2 | State Nodal Officer |
+| 2 | State Nodal Officer | 3 | PFMS Officer |
 
 #### Request Body
 ```json
@@ -522,7 +519,7 @@ Returns a fully rendered HTML page with:
 **400 Bad Request** - Wrong stage for role
 ```json
 {
-  "detail": "Cannot approve: application is at stage 2, but your role (ADM) can only act at stage 0"
+  "detail": "Cannot approve: application is at stage 2, but your role (Tribal Officer) can only act at stage 0"
 }
 ```
 
@@ -611,7 +608,7 @@ Returns a fully rendered HTML page with:
 **Access:** PFMS Officer only
 
 **Requirements:**
-- Application must be at stage 4 (pending PFMS)
+- Application must be at stage 3 (pending PFMS)
 - Amount should be ₹2,50,000 (configurable)
 
 #### Request Body
@@ -633,7 +630,7 @@ Returns a fully rendered HTML page with:
 ```json
 {
   "icm_id": 123,
-  "current_stage": 6,
+  "current_stage": 5,
   "pending_at": "Completed",
   "application_status": "Completed",
   "message": "Funds released successfully",
@@ -658,7 +655,7 @@ Returns a fully rendered HTML page with:
 **400 Bad Request** - Wrong stage
 ```json
 {
-  "detail": "Cannot release funds: application must be at stage 4 (pending PFMS)"
+  "detail": "Cannot release funds: application must be at stage 3 (pending PFMS)"
 }
 ```
 
@@ -669,8 +666,6 @@ Returns a fully rendered HTML page with:
 | Event Type | Role | Description |
 |------------|------|-------------|
 | `APPLICATION_SUBMITTED` | Citizen | Initial submission |
-| `ADM_APPROVED` | ADM | ADM approval |
-| `ADM_CORRECTION` | ADM | ADM requested correction |
 | `TO_APPROVED` | Tribal Officer | TO approval |
 | `TO_CORRECTION` | Tribal Officer | TO requested correction |
 | `DM_APPROVED` | District Collector/DM/SJO | DM approval |
@@ -685,7 +680,7 @@ Returns a fully rendered HTML page with:
 
 ## Jurisdiction Rules
 
-### District-Level Officers (ADM, Tribal Officer, DM)
+### District-Level Officers (Tribal Officer, DM)
 Must match **both** `state_ut` AND `district` of the application.
 
 ### State-Level Officers (SNO, PFMS)

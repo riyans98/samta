@@ -20,7 +20,7 @@ from app.services.icm_service import (
 )
 
 from app.services.icm_utils import (
-    ROLE_CITIZEN, ROLE_ADM, ROLE_TO, ROLE_DM, ROLE_SNO, ROLE_PFMS,
+    ROLE_CITIZEN, ROLE_TO, ROLE_DM, ROLE_SNO, ROLE_PFMS,
     OFFICER_ROLES,
     STAGE_SUBMITTED, STAGE_COMPLETED,
     assert_jurisdiction,
@@ -53,7 +53,7 @@ __all__ = [
     "pfms_release",
     "append_icm_event",
     # ICM Utils
-    "ROLE_CITIZEN", "ROLE_ADM", "ROLE_TO", "ROLE_DM", "ROLE_SNO", "ROLE_PFMS",
+    "ROLE_CITIZEN", "ROLE_TO", "ROLE_DM", "ROLE_SNO", "ROLE_PFMS",
     "OFFICER_ROLES",
     "STAGE_SUBMITTED", "STAGE_COMPLETED",
     "assert_jurisdiction",
