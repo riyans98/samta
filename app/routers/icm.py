@@ -27,7 +27,8 @@ from app.services.icm_service import (
     get_icm_applications_by_jurisdiction,
     request_icm_correction,
     pfms_release,
-    get_application_documents
+    get_application_documents,
+    resubmit_corrected_application
 )
 from app.services.icm_utils import (
     ROLE_CITIZEN, ROLE_TO, ROLE_DM, ROLE_SNO, ROLE_PFMS,
@@ -64,8 +65,8 @@ class CorrectionRequest(BaseModel):
 
 class PFMSReleaseRequest(BaseModel):
     """Request model for PFMS fund release"""
-    amount: int
-    txn_id: str
+    released_amount: int
+    transaction_id: str
     bank_ref: Optional[str] = None
 
 
@@ -224,6 +225,190 @@ async def submit_icm_application(
     )
     
     logger.info(f"ICM action: submit, icm_id={result.get('icm_id')}, user={token_payload.get('sub')}, role={ROLE_CITIZEN}")
+    
+    return result
+
+
+@router.put("/applications/{icm_id}", status_code=status.HTTP_200_OK)
+async def resubmit_application_with_corrections(
+    icm_id: int,
+    # Groom details (optional - only provide corrected fields)
+    groom_name: Optional[str] = Form(default=None),
+    groom_age: Optional[int] = Form(default=None),
+    groom_father_name: Optional[str] = Form(default=None),
+    groom_dob: Optional[str] = Form(default=None),  # YYYY-MM-DD
+    groom_aadhaar: Optional[int] = Form(default=None),
+    groom_pre_address: Optional[str] = Form(default=None),
+    groom_current_address: Optional[str] = Form(default=None),
+    groom_permanent_address: Optional[str] = Form(default=None),
+    groom_caste_cert_id: Optional[str] = Form(default=None),
+    groom_education: Optional[str] = Form(default=None),
+    groom_training: Optional[str] = Form(default=None),
+    groom_income: Optional[str] = Form(default=None),
+    groom_livelihood: Optional[str] = Form(default=None),
+    groom_future_plan: Optional[str] = Form(default=None),
+    groom_first_marriage: Optional[bool] = Form(default=None),
+    
+    # Bride details (optional - only provide corrected fields)
+    bride_name: Optional[str] = Form(default=None),
+    bride_age: Optional[int] = Form(default=None),
+    bride_father_name: Optional[str] = Form(default=None),
+    bride_dob: Optional[str] = Form(default=None),  # YYYY-MM-DD
+    bride_aadhaar: Optional[int] = Form(default=None),
+    bride_pre_address: Optional[str] = Form(default=None),
+    bride_current_address: Optional[str] = Form(default=None),
+    bride_permanent_address: Optional[str] = Form(default=None),
+    bride_caste_cert_id: Optional[str] = Form(default=None),
+    bride_education: Optional[str] = Form(default=None),
+    bride_training: Optional[str] = Form(default=None),
+    bride_income: Optional[str] = Form(default=None),
+    bride_livelihood: Optional[str] = Form(default=None),
+    bride_future_plan: Optional[str] = Form(default=None),
+    bride_first_marriage: Optional[bool] = Form(default=None),
+    
+    # Marriage details (optional - only provide corrected fields)
+    marriage_date: Optional[str] = Form(default=None),  # YYYY-MM-DD
+    marriage_certificate_number: Optional[str] = Form(default=None),
+    previous_benefit_taken: Optional[bool] = Form(default=None),
+    
+    # Witness details (optional - only provide corrected fields)
+    witness_name: Optional[str] = Form(default=None),
+    witness_aadhaar: Optional[int] = Form(default=None),
+    witness_address: Optional[str] = Form(default=None),
+    witness_verified: Optional[bool] = Form(default=None),
+    
+    # Bank details (optional - only provide corrected fields)
+    joint_account_number: Optional[str] = Form(default=None),
+    joint_ifsc: Optional[str] = Form(default=None),
+    joint_account_bank_name: Optional[str] = Form(default=None),
+    
+    # Files (optional - only provide documents that need to be updated)
+    marriage_certificate: Optional[UploadFile] = File(default=None),
+    groom_signature: Optional[UploadFile] = File(default=None),
+    bride_signature: Optional[UploadFile] = File(default=None),
+    witness_signature: Optional[UploadFile] = File(default=None),
+    
+    # JWT token
+    token_payload: dict = Depends(verify_jwt_token)
+):
+    """
+    Resubmit ICM application with corrections.
+    
+    Applicant can update corrected data and/or documents when application is in
+    "Correction Required" status. Only provide fields that need correction.
+    
+    Supports partial updates - only changed fields need to be submitted.
+    
+    Requires multipart/form-data.
+    
+    Documents (optional - only update if corrected):
+    - marriage_certificate: MARRIAGE
+    - groom_signature: GROOM_SIGN
+    - bride_signature: BRIDE_SIGN
+    - witness_signature: WITNESS_SIGN
+    
+    Returns:
+        Updated application status and details
+    
+    Allowed Roles: Citizen (owner of application)
+    """
+    citizen_id = token_payload.get("citizen_id")
+    if not citizen_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Citizen ID missing from token"
+        )
+    
+    # Build application data with only provided (non-None) values
+    application_data = {}
+    
+    # Add groom details if provided
+    groom_fields = {
+        "groom_name": groom_name,
+        "groom_age": groom_age,
+        "groom_father_name": groom_father_name,
+        "groom_dob": groom_dob,
+        "groom_aadhaar": groom_aadhaar,
+        "groom_pre_address": groom_pre_address,
+        "groom_current_address": groom_current_address,
+        "groom_permanent_address": groom_permanent_address,
+        "groom_caste_cert_id": groom_caste_cert_id,
+        "groom_education": groom_education,
+        "groom_training": groom_training,
+        "groom_income": groom_income,
+        "groom_livelihood": groom_livelihood,
+        "groom_future_plan": groom_future_plan,
+        "groom_first_marriage": groom_first_marriage,
+    }
+    
+    # Add bride details if provided
+    bride_fields = {
+        "bride_name": bride_name,
+        "bride_age": bride_age,
+        "bride_father_name": bride_father_name,
+        "bride_dob": bride_dob,
+        "bride_aadhaar": bride_aadhaar,
+        "bride_pre_address": bride_pre_address,
+        "bride_current_address": bride_current_address,
+        "bride_permanent_address": bride_permanent_address,
+        "bride_caste_cert_id": bride_caste_cert_id,
+        "bride_education": bride_education,
+        "bride_training": bride_training,
+        "bride_income": bride_income,
+        "bride_livelihood": bride_livelihood,
+        "bride_future_plan": bride_future_plan,
+        "bride_first_marriage": bride_first_marriage,
+    }
+    
+    # Add marriage details if provided
+    marriage_fields = {
+        "marriage_date": marriage_date,
+        "marriage_cert_number": marriage_certificate_number,
+        "previous_benefit_taken": previous_benefit_taken,
+    }
+    
+    # Add witness details if provided
+    witness_fields = {
+        "witness_name": witness_name,
+        "witness_aadhaar": witness_aadhaar,
+        "witness_address": witness_address,
+        "witness_verified": witness_verified,
+    }
+    
+    # Add bank details if provided
+    bank_fields = {
+        "joint_account_number": joint_account_number,
+        "joint_ifsc": joint_ifsc,
+        "joint_account_bank_name": joint_account_bank_name,
+    }
+    
+    # Combine all non-None fields
+    application_data.update({k: v for k, v in groom_fields.items() if v is not None})
+    application_data.update({k: v for k, v in bride_fields.items() if v is not None})
+    application_data.update({k: v for k, v in marriage_fields.items() if v is not None})
+    application_data.update({k: v for k, v in witness_fields.items() if v is not None})
+    application_data.update({k: v for k, v in bank_fields.items() if v is not None})
+    
+    # Prepare files dictionary (only include provided files)
+    files = {
+        "marriage_cert_file": marriage_certificate,
+        "groom_signature": groom_signature,
+        "bride_signature": bride_signature,
+        "witness_signature": witness_signature
+    }
+    
+    # Resubmit with corrected data and/or files
+    result = await resubmit_corrected_application(
+        icm_id=icm_id,
+        application_data=application_data,
+        files=files,
+        token_payload=token_payload
+    )
+    
+    logger.info(
+        f"ICM action: resubmit corrections, icm_id={icm_id}, "
+        f"user={token_payload.get('sub')}, role={ROLE_CITIZEN}"
+    )
     
     return result
 
@@ -727,8 +912,8 @@ async def pfms_fund_release(
         icm_id=icm_id,
         actor=token_payload.get("sub"),
         role=role,
-        amount=payload.amount,
-        txn_id=payload.txn_id,
+        amount=payload.released_amount,
+        txn_id=payload.transaction_id,
         bank_ref=payload.bank_ref,
         token_payload=token_payload
     )

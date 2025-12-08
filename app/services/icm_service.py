@@ -11,6 +11,7 @@ Business logic for ICM application management with proper workflow:
 
 import logging
 from typing import Dict, Any, Optional, List
+from datetime import datetime
 from fastapi import HTTPException, status, UploadFile
 
 from app.core.config import settings
@@ -711,3 +712,164 @@ def get_application_documents(icm_id: int) -> Dict[str, Any]:
         "icm_id": icm_id,
         "documents": documents
     }
+
+
+# ======================== APPLICANT RESUBMIT CORRECTIONS ========================
+
+async def resubmit_corrected_application(
+    icm_id: int,
+    application_data: Dict[str, Any],
+    files: Dict[str, Optional[UploadFile]],
+    token_payload: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Applicant resubmits ICM application with corrections.
+    
+    Updates existing application with corrected data and new files.
+    Resets stage to 1 (Tribal Officer review), pending_at='Tribal Officer'.
+    Application status changes from "Correction Required" to "Resubmitted".
+    
+    Validates:
+    1. Application must exist and be in "Correction Required" status
+    2. Only the original applicant (citizen_id) can resubmit
+    3. At least the corrected data or files must be provided
+    
+    Args:
+        icm_id: Application ID
+        application_data: Updated form field data
+        files: Dictionary of uploaded files (can be partial update)
+        token_payload: JWT token payload
+    
+    Returns:
+        Resubmission details with updated application info
+    
+    Raises:
+        HTTPException: On validation or update failure
+    """
+    citizen_id = token_payload.get("citizen_id")
+    
+    # Validate application exists
+    application = get_icm_application_by_id(icm_id)
+    if not application:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"ICM Application #{icm_id} not found"
+        )
+    
+    # Validate applicant ownership
+    if application.citizen_id != citizen_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only resubmit your own applications"
+        )
+    
+    # Validate application is in "Correction Required" or "Resubmitted" status
+    current_status = application.application_status
+    allowed_statuses = ["Correction Required", "Resubmitted"]
+    if current_status not in allowed_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Application must be in 'Correction Required' or 'Resubmitted' status. Current status: {current_status}"
+        )
+    
+    try:
+        # Prepare update payload with corrected data
+        current_stage = application.current_stage
+        update_payload = {}
+        
+        # Update all provided fields
+        if application_data:
+            update_payload.update(application_data)
+        
+        # Reset workflow for resubmission
+        update_payload.update({
+            "current_stage": STAGE_SUBMITTED,  # 0 -> will move to 1
+            "application_status": "Resubmitted",
+            "pending_at": ROLE_TO,  # Tribal Officer
+            "updated_at": datetime.utcnow().isoformat()
+        })
+        
+        # Update application with corrected data
+        success = update_icm_application(icm_id, update_payload)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update application with corrected data"
+            )
+        
+        logger.info(f"ICM application updated: icm_id={icm_id}, citizen_id={citizen_id}")
+        
+        # Save/update files if provided
+        file_paths = {}
+        uploader = f"citizen_{citizen_id}"
+        
+        # MARRIAGE certificate
+        if files.get("marriage_cert_file"):
+            filename = await save_icm_file(icm_id, files["marriage_cert_file"], "MARRIAGE", uploader)
+            if filename:
+                file_paths["marriage_certificate_file"] = filename
+        
+        # GROOM_SIGN
+        if files.get("groom_signature"):
+            filename = await save_icm_file(icm_id, files["groom_signature"], "GROOM_SIGN", uploader)
+            if filename:
+                file_paths["groom_signature_file"] = filename
+        
+        # BRIDE_SIGN
+        if files.get("bride_signature"):
+            filename = await save_icm_file(icm_id, files["bride_signature"], "BRIDE_SIGN", uploader)
+            if filename:
+                file_paths["bride_signature_file"] = filename
+        
+        # WITNESS_SIGN (optional)
+        if files.get("witness_signature"):
+            filename = await save_icm_file(icm_id, files["witness_signature"], "WITNESS_SIGN", uploader)
+            if filename:
+                file_paths["witness_signature_file"] = filename
+        
+        # Update application with new file paths if any files were provided
+        if file_paths:
+            update_icm_application(icm_id, file_paths)
+        
+        # Create CORRECTION_RESUBMITTED event
+        event_data = {
+            "action": "resubmitted_corrections",
+            "applicant_aadhaar": token_payload.get("aadhaar_number"),
+            "previous_stage": current_stage,
+            "files_updated": list(file_paths.keys()),
+            "data_fields_updated": list(application_data.keys()) if application_data else []
+        }
+        
+        append_icm_event(
+            icm_id=icm_id,
+            event_type="CORRECTION_RESUBMITTED",
+            event_role=ROLE_CITIZEN,
+            event_stage=STAGE_SUBMITTED,
+            comment="Corrected application resubmitted by citizen",
+            event_data=event_data
+        )
+        
+        logger.info(
+            f"ICM action: resubmit corrections, icm_id={icm_id}, "
+            f"user={token_payload.get('sub')}, role={ROLE_CITIZEN}"
+        )
+        
+        return {
+            "icm_id": icm_id,
+            "status": "resubmitted",
+            "message": "Corrected application resubmitted successfully",
+            "current_stage": STAGE_SUBMITTED,
+            "pending_at": ROLE_TO,
+            "application_status": "Resubmitted",
+            "files_updated": list(file_paths.keys()),
+            "data_fields_updated": list(application_data.keys()) if application_data else []
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to resubmit corrected ICM application: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to resubmit corrected application: {str(e)}"
+        )

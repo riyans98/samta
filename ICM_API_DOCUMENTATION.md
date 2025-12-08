@@ -230,6 +230,78 @@ Authorization: Bearer <JWT_TOKEN>
 
 ---
 
+### 4. Resubmit Application with Corrections
+
+**Endpoint:** `PUT /icm/applications/{icm_id}`
+
+**Description:** Applicant resubmits a corrected application after receiving correction feedback. Allows updating corrected data and/or documents. Only applications in "Correction Required" status can be resubmitted.
+
+**Request Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+Content-Type: multipart/form-data
+```
+
+**Request Body (Form Data - Partial Update):**
+Only provide fields that need correction. All fields are optional.
+
+```
+groom_name: Rajesh Kumar (corrected)
+groom_age: 29
+bride_name: Priya Singh (corrected)
+marriage_date: 2025-03-14
+marriage_certificate: <file>
+groom_signature: <file>
+bride_signature: <file>
+```
+
+**Available Fields for Correction:**
+- Groom details: `groom_name`, `groom_age`, `groom_father_name`, `groom_dob`, `groom_aadhaar`, `groom_pre_address`, `groom_current_address`, `groom_permanent_address`, `groom_caste_cert_id`, `groom_education`, `groom_training`, `groom_income`, `groom_livelihood`, `groom_future_plan`, `groom_first_marriage`
+- Bride details: `bride_name`, `bride_age`, `bride_father_name`, `bride_dob`, `bride_aadhaar`, `bride_pre_address`, `bride_current_address`, `bride_permanent_address`, `bride_caste_cert_id`, `bride_education`, `bride_training`, `bride_income`, `bride_livelihood`, `bride_future_plan`, `bride_first_marriage`
+- Marriage details: `marriage_date`, `marriage_certificate_number`, `previous_benefit_taken`
+- Witness details: `witness_name`, `witness_aadhaar`, `witness_address`, `witness_verified`
+- Bank details: `joint_account_number`, `joint_ifsc`, `joint_account_bank_name`
+- Documents: `marriage_certificate`, `groom_signature`, `bride_signature`, `witness_signature`
+
+**Response (200 OK):**
+```json
+{
+  "icm_id": 1,
+  "status": "resubmitted",
+  "message": "Corrected application resubmitted successfully",
+  "current_stage": 0,
+  "pending_at": "Tribal Officer",
+  "application_status": "Resubmitted",
+  "files_updated": ["marriage_certificate_file", "groom_signature_file"],
+  "data_fields_updated": ["groom_name", "groom_age", "marriage_date"]
+}
+```
+
+**Error Responses:**
+- `401 Unauthorized` - Invalid JWT or missing citizen_id
+- `403 Forbidden` - Not the application owner, or invalid role
+- `404 Not Found` - Application not found
+- `400 Bad Request` - Application not in "Correction Required" status
+- `500 Internal Server Error` - Database error
+
+**Workflow Changes:**
+- Application stage resets to 0 (Submitted)
+- Application status changes to "Resubmitted"
+- Pending at: "Tribal Officer" (for review)
+- New timeline event: `CORRECTION_RESUBMITTED`
+
+**Timeline Event Created:** `CORRECTION_RESUBMITTED`
+
+**Notes:**
+- Only the original applicant (citizen) can resubmit corrections
+- Application must be in "Correction Required" status
+- Partial updates supported - only provide corrected fields
+- All file updates are optional
+- New files will overwrite previous versions
+- New events are created for audit trail
+
+---
+
 ## Officer Endpoints
 
 ### 1. Approve Application
@@ -237,6 +309,7 @@ Authorization: Bearer <JWT_TOKEN>
 **Endpoint:** `POST /icm/applications/{icm_id}/approve`
 
 **Description:** Approve an application and move it to the next stage.
+````
 
 **Path Parameters:**
 - `icm_id` (integer, required) - Application ID
