@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Literal, Optional
 from datetime import date, time, datetime
 
 # Aadhaar Model
@@ -110,3 +110,42 @@ class NPCIBankKYC(BaseModel):
     kyc_status: Optional[str] = None        # verified, pending, rejected
     kyc_completed_on: Optional[date] = None
     remarks: Optional[str] = None
+
+# table name = treasury
+class TreasuryRecord(BaseModel):
+    id: int
+    transaction_id: Optional[str] = None
+
+    case_id: Optional[str] = None
+    case_type: Optional[str] = None  # 'ATROCITY' or 'ICM'
+
+    amount: float
+    transaction_type: str            # 'CREDIT' or 'DEBIT'
+
+    balance_after: float
+
+    initiated_by: Optional[str] = None
+    state: str
+    district: str
+    remark: Optional[str] = None
+
+    transaction_time: datetime
+
+class TreasuryTransaction(BaseModel):
+    amount: float
+    transaction_id: Optional[str] = None
+    transaction_type: Optional[Literal['CREDIT', 'DEBIT']]
+    state: str
+    district: str
+    remark: Optional[str]
+
+# table name = AtrocitySections 
+class AtrocitySection(BaseModel):
+    id: int
+    Section: str
+    OffenseDescription: str
+    MinimumCompensation: float
+    PaymentStages: Optional[str] = None
+
+    class Config:
+        orm_mode = True
