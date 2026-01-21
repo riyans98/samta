@@ -135,6 +135,8 @@ async def citizen_login(credentials: CitizenLoginCredentials):
         "role": "citizen",
         "citizen_id": citizen_data['citizen_id'],
         "aadhaar_number": citizen_data['aadhaar_number'],
+        "state_ut": citizen_data.get('state_ut'),
+        "district": citizen_data.get('district')
     }
     
     # Generate JWT token
@@ -154,7 +156,8 @@ async def citizen_login(credentials: CitizenLoginCredentials):
         "email": citizen_data.get('email'),
         "created_at": citizen_data.get('created_at'),
         "updated_at": citizen_data.get('updated_at'),
-        "access_token": access_token
+        "access_token": access_token,
+        "payload": token_payload
     }
     
     return response_data

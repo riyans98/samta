@@ -92,6 +92,7 @@ def get_user_icm_applications(citizen_id: int) -> List[Dict[str, Any]]:
     Returns:
         List of ICM applications as dictionaries
     """
+    print(citizen_id)
     applications = get_icm_applications_by_citizen(citizen_id)
     return [app.model_dump() for app in applications]
 
@@ -114,8 +115,15 @@ def get_icm_applications_by_jurisdiction(
     """
     all_applications = get_all_icm_applications()
 
+    print("total length : " + str(len(all_applications)))
+
     filtered = []
     for app in all_applications:
+        print("state:  " + state_ut)
+        print("district:  " + district)
+        print("pending:  " + pending_at)
+        print(app)
+        print(state_ut)
         # Filter by state
         if app.state_ut.lower() != state_ut.lower():
             continue

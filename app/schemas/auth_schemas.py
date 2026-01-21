@@ -102,6 +102,7 @@ class CitizenUserResponse(BaseModel):
 class CitizenLoginResponse(CitizenUserResponse):
     """Response model for citizen login with JWT token."""
     access_token: str
+    payload: dict
 
 
 # Citizen Data with Aadhaar Info

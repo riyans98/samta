@@ -3,7 +3,7 @@ from app.core.config import settings
 import mysql.connector
 from mysql.connector import Error
 from fastapi import HTTPException, status
-from app.schemas.govt_record_schemas import AadhaarRecord, FIRRecord, CasteCertificate, NPCIBankKYC
+from app.schemas.govt_record_schemas import AadhaarRecord, AtrocitySection, FIRRecord, CasteCertificate, NPCIBankKYC
 from typing import Optional, List, Dict, Any
 
 
@@ -442,3 +442,20 @@ def get_all_npci_kyc(filters: Optional[Dict[str, Any]] = None, limit: int = 100,
         cursor.close()
         connection.close()
 
+def get_all_atrocity_sections() -> List[AtrocitySection]:
+    """Fetch all atrocity sections from the AtrocitySections table."""
+    connection = get_govt_db_connection()
+    try:
+        cursor = connection.cursor(dictionary=True)
+        query = "SELECT * FROM AtrocitySections"
+        cursor.execute(query)
+        results = cursor.fetchall()
+        return [AtrocitySection(**row) for row in results]
+    except Error as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Atrocity sections fetch failed: {e}"
+        )
+    finally:
+        cursor.close()
+        connection.close()

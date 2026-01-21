@@ -6,6 +6,7 @@ Provides endpoints to fetch government records:
 - Aadhaar Records
 - Caste Certificates
 - NPCI Bank KYC
+- Atrocity Sections
 
 Access: Citizens & Officers (used for validation and verification)
 """
@@ -15,9 +16,10 @@ from typing import Optional, List
 from fastapi import APIRouter, HTTPException, status, Depends
 
 from app.core.security import verify_jwt_token
-from app.schemas.govt_record_schemas import AadhaarRecord, CasteCertificate, NPCIBankKYC
+from app.schemas.govt_record_schemas import AadhaarRecord, AtrocitySection, CasteCertificate, NPCIBankKYC
 from app.db.govt_session import (
     get_aadhaar_by_number,
+    get_all_atrocity_sections,
     get_caste_certificate_by_id,
     get_caste_certificates_by_aadhaar,
     get_caste_certificates_by_person_name,
@@ -341,3 +343,25 @@ async def get_bank_kyc_by_kyc_status(
     logger.info(f"Bank KYC lookup by status: {kyc_status}, accessed by user: {token_payload.get('sub')}")
     
     return kyc_data
+
+@router.get("/atrocity-sections", response_model=List[AtrocitySection])
+async def get_atrocity_sections(token_payload: dict = Depends(verify_jwt_token)):
+    """
+    Get all atrocity sections from the AtrocitySections table.
+    
+    Useful for:
+    - Providing a list of sections for case filing
+    - Reference during case management
+    
+    Access: Citizens & Officers
+    """
+    sections = get_all_atrocity_sections()
+    print(sections)
+    
+    if not sections:
+        logger.info("No atrocity sections found in the database.")
+        return []
+    
+    logger.info(f"Atrocity sections lookup accessed by user: {token_payload.get('sub')}")
+    
+    return sections

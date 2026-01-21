@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Literal, Dict
 from datetime import date, datetime
 
@@ -318,3 +318,34 @@ class AtrocityFullRecord(BaseModel):
     data: AtrocityDBModel
     documents: DocumentsByType = DocumentsByType()
     events: Optional[List[CaseEvent]] = None
+
+
+
+# ======================================================================
+# app/schemas/dbt_schemas.py (New Models)
+class SeniorResolutionPayload(BaseModel):
+    alert_id: int
+    senior_input: str = Field(..., max_length=500)
+    
+class JuniorResponsePayload(BaseModel):
+    alert_id: int
+    junior_reason: str = Field(..., max_length=500)
+
+
+# app/schemas/dbt_schemas.py
+
+from pydantic import BaseModel, Field
+from typing import Optional
+
+# ... (Existing models like AtrocityBase etc.) ...
+
+# 🔥 NEW MODELS FOR ALERT RESOLUTION (Add these)
+
+class SeniorResolutionPayload(BaseModel):
+    alert_id: int
+    # Senior ka input zaroori hai (min length check optional hai)
+    senior_input: str = Field(..., min_length=5, max_length=500, description="Reason or instruction from Senior Officer")
+
+class JuniorResponsePayload(BaseModel):
+    alert_id: int
+    junior_reason: str = Field(..., min_length=5, max_length=500, description="Reply from Junior Officer")

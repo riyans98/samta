@@ -429,6 +429,8 @@ async def get_citizen_applications(
     """
     role = token_payload.get("role")
     citizen_id = token_payload.get("citizen_id")
+
+    print("my id:" + str(citizen_id))
     
     # Citizen view - their own applications
     if citizen_id and role == ROLE_CITIZEN:
