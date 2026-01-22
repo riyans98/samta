@@ -27,9 +27,9 @@ def filter_cases_by_jurisdiction(
     
     Rules:
     - IO: Only cases from their police station
-    - TO/DM: Only cases from their district + state
+    - TO/DM/Special Officer: Only cases from their district + state
     - SNO: All cases from their state
-    - PFMS: Cases from their state at fund release stages (4, 6, 7)
+    - PFMS: Cases from their state at fund release stages (2, 4, 6)
     
     Args:
         cases: List of AtrocityDBModel cases
@@ -51,8 +51,8 @@ def filter_cases_by_jurisdiction(
             if case.Vishesh_P_S_Name == user_ps:
                 filtered.append(case)
         
-        # Tribal Officer or District Collector/DM/SJO: match district AND state
-        elif role in ("Tribal Officer", "District Collector/DM/SJO"):
+        # Special Officer, Tribal Officer or District Collector/DM/SJO: match district AND state
+        elif role in ("Tribal Officer", "District Collector/DM/SJO", "Special Officer"):
             if case.District == user_district and case.State_UT == user_state:
                 filtered.append(case)
         
@@ -63,7 +63,8 @@ def filter_cases_by_jurisdiction(
         
         # PFMS Officer: match state AND fund release stages
         elif role == "PFMS Officer":
-            if case.State_UT == user_state and case.Stage in (4, 6, 7):
+            # NEW WORKFLOW: stages 2, 4, 6 | OLD WORKFLOW: stages 4, 6, 8
+            if case.State_UT == user_state and case.Stage in (2, 4, 6, 8):
                 filtered.append(case)
     
     return filtered
@@ -78,9 +79,9 @@ def validate_jurisdiction(
     
     Rules:
     - IO: case.Vishesh_P_S_Name == user.vishesh_p_s_name
-    - TO/DM: case.District == user.district AND case.State_UT == user.state_ut
+    - TO/DM/Special Officer: case.District == user.district AND case.State_UT == user.state_ut
     - SNO: case.State_UT == user.state_ut (full state access)
-    - PFMS: case.State_UT == user.state_ut AND case.Stage in {4, 6, 7}
+    - PFMS: case.State_UT == user.state_ut AND case.Stage in {2, 4, 6}
     
     Raises 403 if user lacks jurisdiction access.
     
@@ -109,8 +110,8 @@ def validate_jurisdiction(
             )
         return
     
-    # Tribal Officer or District Collector/DM/SJO: must match district AND state
-    if role in ("Tribal Officer", "District Collector/DM/SJO"):
+    # Tribal Officer, Special Officer, or District Collector/DM/SJO: must match district AND state
+    if role in ("Tribal Officer", "District Collector/DM/SJO", "Special Officer"):
         if case_state != user_state or case_district != user_district:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -134,10 +135,11 @@ def validate_jurisdiction(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"You only have access to cases from {user_state}"
             )
-        if case.Stage not in (4, 6, 7, 8):
+        # NEW WORKFLOW: stages 2, 4, 6 | OLD WORKFLOW: stages 4, 6, 8
+        if case.Stage not in (2, 4, 6, 8):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"PFMS Officers can only access cases at fund release stages (4, 6, 7)"
+                detail=f"PFMS Officers can only access cases at fund release stages (2, 4, 6)"
             )
         return
 
@@ -208,7 +210,7 @@ def approve_case_workflow(
         actor: User who is approving (login_id)
         role: Role of the approver
         comment: Optional comment
-        fund_amount: Optional fund amount (for Tribal Officer at stage 1)
+        fund_amount: Optional fund amount (for Special Officer or Tribal Officer at stage 1)
         stage_allowed_role: Mapping of stages to allowed roles
         stage_next_pending_at: Mapping of current stage to next pending role
         stage_approval_event: Mapping of stage to approval event type
@@ -239,7 +241,7 @@ def approve_case_workflow(
         "Approved_By": role
     }
     
-    # Add fund amount if provided (Tribal Officer at stage 1)
+    # Add fund amount if provided (Special Officer or Tribal Officer at stage 1)
     if fund_amount is not None:
         update_payload["Fund_Ammount"] = str(fund_amount)
     

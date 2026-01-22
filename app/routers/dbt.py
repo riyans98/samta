@@ -318,9 +318,9 @@ async def submit_fir_form(
 
             # Stage and Pending_At logic based on isDrafted
             # If isDrafted=True: stays at Stage 0 (IO draft)
-            # If isDrafted=False: moves to Stage 1 (Tribal Officer pending)
+            # If isDrafted=False: moves to Stage 1 (Special Officer pending)
             "Stage": 0 if isDrafted else 1,
-            "Pending_At": 'Investigation Officer' if isDrafted else 'Tribal Officer',
+            "Pending_At": 'Investigation Officer' if isDrafted else 'Special Officer',
             
             # Jurisdiction fields (captured from IO's JWT token - the filing officer)
             "State_UT": token_payload.get('state_ut'),
@@ -410,7 +410,7 @@ async def submit_fir_form(
         # Only update allowed fields to prevent overwriting sensitive data
         update_payload = {
             "Stage": 0 if isDrafted else 1,
-            "Pending_At": 'Investigation Officer' if isDrafted else 'Tribal Officer',
+            "Pending_At": 'Investigation Officer' if isDrafted else 'Special Officer',
             "Approved_By": token_payload.get('sub')
         }
         
@@ -455,7 +455,7 @@ async def submit_fir_form(
         "case_no": case_no,
         "fir_no": firNumber,
         "stage": 0 if isDrafted else 1,
-        "pending_at": "Investigation Officer" if isDrafted else "Tribal Officer",
+        "pending_at": "Investigation Officer" if isDrafted else "Special Officer",
         "is_drafted": isDrafted,
         "is_update": existing_case is not None,
         "message": f"FIR saved as {'draft' if isDrafted else 'submitted successfully'}. Case #{case_no} {'created' if not existing_case else 'updated'}."
@@ -488,8 +488,8 @@ def filter_cases_by_jurisdiction(
             if case.Vishesh_P_S_Name == user_ps:
                 filtered.append(case)
         
-        # Tribal Officer or District Collector/DM/SJO: match district + state
-        elif role in ("Tribal Officer", "District Collector/DM/SJO"):
+        # Tribal Officer, Special Officer, or District Collector/DM/SJO: match district + state
+        elif role in ("Tribal Officer", "Special Officer", "District Collector/DM/SJO"):
             if case.State_UT == user_state and case.District == user_district:
                 filtered.append(case)
         
@@ -500,7 +500,8 @@ def filter_cases_by_jurisdiction(
         
         # PFMS Officer: match state AND fund release stages
         elif role == "PFMS Officer":
-            if case.State_UT == user_state and case.Stage in (4, 6, 7, 8):
+            # NEW WORKFLOW: stages 2, 4, 6 | OLD WORKFLOW: stages 4, 6, 8
+            if case.State_UT == user_state and case.Stage in (2, 4, 6, 8):
                 filtered.append(case)
     
     return filtered
@@ -631,8 +632,8 @@ def validate_jurisdiction(
             )
         return
     
-    # Tribal Officer or District Collector/DM/SJO: must match district AND state
-    if role in ("Tribal Officer", "District Collector/DM/SJO"):
+    # Tribal Officer, Special Officer, or District Collector/DM/SJO: must match district AND state
+    if role in ("Tribal Officer", "Special Officer", "District Collector/DM/SJO"):
         if case_state != user_state or case_district != user_district:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -656,10 +657,11 @@ def validate_jurisdiction(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Access denied: Case is in state '{case_state}', but you are assigned to '{user_state}'"
             )
-        if case.Stage not in (4, 6, 7, 8):
+        # NEW WORKFLOW: stages 2, 4, 6 | OLD WORKFLOW: stages 4, 6, 8
+        if case.Stage not in (2, 4, 6, 8):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"PFMS can only access cases at fund release stages (4, 6, 7). Case is at stage {case.Stage}"
+                detail=f"PFMS can only access cases at fund release stages (2, 4, 6). Case is at stage {case.Stage}"
             )
         return
 
@@ -743,8 +745,8 @@ async def approve_case(
         **(payload.payload or {})
     }
     
-    # For Tribal Officer at stage 1: include fund_amount in event_data if provided
-    if payload.role == "Tribal Officer" and case.Stage == 1 and payload.fund_amount:
+    # For Special Officer (new) or Tribal Officer (old) at stage 1: include fund_amount in event_data if provided
+    if payload.role in ["Special Officer", "Tribal Officer"] and case.Stage == 1 and payload.fund_amount:
         event_data["fund_amount"] = payload.fund_amount
         event_data["fund_type"] = "Allowance Fund"
     
@@ -763,8 +765,8 @@ async def approve_case(
         "Approved_By": payload.actor
     }
     
-    # For Tribal Officer at stage 1: update Fund_Ammount in ATROCITY table if fund_amount provided
-    if payload.role == "Tribal Officer" and case.Stage == 1 and payload.fund_amount:
+    # For Special Officer (new) or Tribal Officer (old) at stage 1: update Fund_Ammount in ATROCITY table if fund_amount provided
+    if payload.role in ["Special Officer", "Tribal Officer"] and case.Stage == 1 and payload.fund_amount:
         update_payload["Fund_Ammount"] = payload.fund_amount
     
     update_atrocity_case(case_no, update_payload)
@@ -791,10 +793,12 @@ async def request_correction(
     token_payload: dict = Depends(verify_jwt_token)
 ):
     """
-    Request correction on a case. Only DM can do this at stage 2.
-    Case goes back to Tribal Officer (stage 1).
+    Request correction on a case.
     
-    Transition: Stage 2 → Stage 1 (DM → Tribal Officer)
+    OLD WORKFLOW: DM at stage 2 sends case back to Tribal Officer (stage 1)
+    NEW WORKFLOW: Not applicable - Special Officer handles all pre-fund approvals
+    
+    NOTE: This endpoint may need review for new workflow. Currently disabled.
     """
     # Get current case
     case = get_fir_data_by_case_no(case_no)
@@ -826,16 +830,16 @@ async def request_correction(
         event_data=event_data
     )
     
-    # Send case back to Tribal Officer (stage 1)
+    # Send case back to Special Officer (stage 1) for re-review
     update_atrocity_case(case_no, {
         "Stage": 1,
-        "Pending_At": "Tribal Officer"
+        "Pending_At": "Special Officer"
     })
     
     return {
         "message": f"Correction requested for case {case_no}",
         "new_stage": 1,
-        "pending_at": "Tribal Officer",
+        "pending_at": "Special Officer",
         "corrections_required": payload.corrections_required
     }
 
@@ -849,10 +853,15 @@ async def release_funds(
     """
     Release funds (tranche) to the victim. PFMS Officer only.
     
-    Tranche stages:
+    NEW WORKFLOW Tranche stages:
+    - Stage 2: First 25% → Stage 3 (chargesheet pending)
+    - Stage 4: Second 25-50% → Stage 5 (judgment pending)
+    - Stage 6: Final tranche (after judgment recorded) → Stage 7 (case closed)
+    
+    OLD WORKFLOW Tranche stages:
     - Stage 4: First 25% → Stage 5 (chargesheet pending)
     - Stage 6: Second 25-50% → Stage 7 (judgment pending)
-    - Stage 8: Final tranche (after judgment recorded) → Stage 9 (case closed)
+    - Stage 8: Final tranche → Stage 9 (case closed)
     
     Fund amounts are tracked ONLY in CASE_EVENTS (not in ATROCITY table).
     """
@@ -937,9 +946,10 @@ async def submit_chargesheet(
     token_payload: dict = Depends(verify_jwt_token)
 ):
     """
-    Submit chargesheet for a case. Investigation Officer only at stage 5.
+    Submit chargesheet for a case. Investigation Officer only at stage 3.
     
-    Transition: Stage 5 → Stage 6 (Chargesheet submitted, second tranche pending)
+    NEW WORKFLOW: Transition: Stage 3 → Stage 4 (Chargesheet submitted, second tranche pending)
+    OLD WORKFLOW: Transition: Stage 5 → Stage 6
     """
     # Get current case
     case = get_fir_data_by_case_no(case_no)
@@ -949,8 +959,19 @@ async def submit_chargesheet(
     # Validate jurisdiction access
     validate_jurisdiction(token_payload, case)
     
-    # IO at stage 5 can submit chargesheet
-    validate_role_for_action(token_payload, payload.role, case, 5)
+    # IO at stage 3 (new) or stage 5 (old) can submit chargesheet
+    if case.Stage not in [3, 5]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Case is at stage {case.Stage}, but chargesheet requires stage 3 (new workflow) or 5 (old workflow)"
+        )
+    
+    jwt_role = token_payload.get("role")
+    if jwt_role != payload.role:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Role mismatch: JWT role '{jwt_role}' does not match payload role '{payload.role}'"
+        )
     
     if payload.role != "Investigation Officer":
         raise HTTPException(
@@ -973,16 +994,17 @@ async def submit_chargesheet(
         event_data=event_data
     )
     
-    # Move to stage 6 (second tranche pending)
+    # Move to next stage (stage 4 for new workflow, stage 6 for old workflow)
+    next_stage = 4 if case.Stage == 3 else 6
     update_atrocity_case(case_no, {
-        "Stage": 6,
+        "Stage": next_stage,
         "Pending_At": "PFMS Officer"
     })
     
     return {
         "message": f"Chargesheet submitted for case {case_no}",
         "chargesheet_no": payload.chargesheet_no,
-        "new_stage": 6,
+        "new_stage": next_stage,
         "pending_at": "PFMS Officer"
     }
 
@@ -1451,7 +1473,7 @@ def validate_jurisdiction(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: PS mismatch.")
         return
     
-    if role in ("Tribal Officer", "District Collector/DM/SJO"):
+    if role in ("Tribal Officer", "Special Officer", "District Collector/DM/SJO"):
         # Comparison uses normalized, clean strings
         if case_state != user_state or case_district != user_district: 
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: District/State mismatch.")
@@ -1463,7 +1485,8 @@ def validate_jurisdiction(
         return
     
     if role == "PFMS Officer":
-        if case_state != user_state or case.Stage not in (4, 6, 7, 8):
+        # NEW WORKFLOW: stages 2, 4, 6 | OLD WORKFLOW: stages 4, 6, 8
+        if case_state != user_state or case.Stage not in (2, 4, 6, 8):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="PFMS access denied.")
         return
 
@@ -1695,8 +1718,8 @@ def filter_cases_by_jurisdiction(
             if case_ps == user_ps:
                 filtered.append(case)
         
-        # Tribal Officer or District Collector/DM/SJO: match district + state
-        elif role in ("Tribal Officer", "District Collector/DM/SJO"):
+        # Tribal Officer, Special Officer, or District Collector/DM/SJO: match district + state
+        elif role in ("Tribal Officer", "Special Officer", "District Collector/DM/SJO"):
             if case_state == user_state and case_district == user_district:
                 filtered.append(case)
         
@@ -1707,7 +1730,8 @@ def filter_cases_by_jurisdiction(
         
         # PFMS Officer: match state AND fund release stages
         elif role == "PFMS Officer":
-            if case_state == user_state and case.Stage in (4, 6, 7, 8):
+            # NEW WORKFLOW: stages 2, 4, 6 | OLD WORKFLOW: stages 4, 6, 8
+            if case_state == user_state and case.Stage in (2, 4, 6, 8):
                 filtered.append(case)
     
     return filtered

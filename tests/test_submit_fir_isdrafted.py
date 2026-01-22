@@ -3,7 +3,7 @@ Test suite for submit_fir isDrafted logic
 
 Tests verify that:
 1. isDrafted=True → Stage 0, Pending_At="Investigation Officer", no FIR_SUBMITTED event
-2. isDrafted=False → Stage 1, Pending_At="Tribal Officer", FIR_SUBMITTED event created
+2. isDrafted=False → Stage 1, Pending_At="Special Officer", FIR_SUBMITTED event created
 """
 
 import pytest
@@ -142,7 +142,7 @@ class TestSubmitFirIsDrafted:
     ):
         """
         Test: isDrafted=False (default)
-        Expected: Stage=1, Pending_At="Tribal Officer", FIR_SUBMITTED event inserted
+        Expected: Stage=1, Pending_At="Special Officer", FIR_SUBMITTED event inserted
         """
         # Setup mocks
         mock_fir.return_value = mock_fir_data
@@ -174,14 +174,14 @@ class TestSubmitFirIsDrafted:
         assert response["case_no"] == 1002
         assert response["fir_no"] == "FIR-2025-002"
         assert response["stage"] == 1, "Stage should be 1 for final submit"
-        assert response["pending_at"] == "Tribal Officer", "Pending_At should be TO for final submit"
+        assert response["pending_at"] == "Special Officer", "Pending_At should be Special Officer for final submit"
         assert response["is_drafted"] == False, "is_drafted flag should be False"
         assert "submitted" in response["message"].lower(), "Message should indicate submission"
 
         # Verify that insert_atrocity_case was called with Stage=1
         call_args = mock_insert_case.call_args[0][0]  # Get the data dict argument
         assert call_args["Stage"] == 1, "ATROCITY table should have Stage=1"
-        assert call_args["Pending_At"] == "Tribal Officer", "ATROCITY table should have Pending_At=TO"
+        assert call_args["Pending_At"] == "Special Officer", "ATROCITY table should have Pending_At=Special Officer"
 
         # Verify that FIR_SUBMITTED event WAS inserted for final submit
         mock_insert_event.assert_called_once()

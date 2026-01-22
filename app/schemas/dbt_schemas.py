@@ -9,6 +9,7 @@ from datetime import date, datetime
 
 # Which role can act at each stage
 STAGE_ALLOWED_ROLE: Dict[int, str] = {
+    0: "Investigation Officer",   # IO submits draft to Special Officer
     1: "Special Officer",         # Special Officer Approval (replaces TO, DM, SNO)
     2: "PFMS Officer",            # PFMS Fund Transfer (first 25%)
     3: "Investigation Officer",   # Chargesheet Submission
@@ -19,6 +20,7 @@ STAGE_ALLOWED_ROLE: Dict[int, str] = {
 
 # Where case goes after approval at each stage
 STAGE_NEXT_PENDING_AT: Dict[int, str] = {
+    0: "Special Officer",      # After IO submits draft → Special Officer for approval
     1: "PFMS Officer",         # After Special Officer approves → PFMS for 1st tranche
     2: "Investigation Officer", # After 1st tranche → IO for chargesheet
     3: "PFMS Officer",         # After chargesheet → PFMS for 2nd tranche
@@ -29,6 +31,7 @@ STAGE_NEXT_PENDING_AT: Dict[int, str] = {
 
 # Event type generated at each approval stage
 STAGE_APPROVAL_EVENT: Dict[int, str] = {
+    0: "FIR_SUBMITTED",            # IO submits draft
     1: "SPECIAL_OFFICER_APPROVED",
     2: "PFMS_FIRST_TRANCHE",
     3: "CHARGESHEET_SUBMITTED",
@@ -79,7 +82,8 @@ RolesType = Literal[
     "Tribal Officer",
     "District Collector/DM/SJO",
     "Investigation Officer",
-    "PFMS Officer"
+    "PFMS Officer",
+    "Special Officer"
 ]
 
 
@@ -237,7 +241,7 @@ class ApprovalPayload(BaseModel):
     role: RolesType
     next_stage: int
     comment: Optional[str] = None
-    fund_amount: Optional[float] = None  # For Tribal Officer to set allowance fund amount at stage 1
+    fund_amount: Optional[float] = None  # For Special Officer or Tribal Officer to set allowance fund amount at stage 1
     payload: Optional[dict] = None
 
 
