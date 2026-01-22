@@ -45,6 +45,7 @@ async def create_district_lvl_officer(
     "District Collector/DM/SJO",
     "Investigation Officer",
     "PFMS Officer",
+    "Special Officer",
     "ADM"
 ]:
         raise HTTPException(

@@ -12,6 +12,7 @@ RolesType = Literal[
     "District Collector/DM/SJO",
     "Investigation Officer",
     "PFMS Officer",
+    "Special Officer",
     "ADM"
 ]
 

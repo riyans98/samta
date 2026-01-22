@@ -26,6 +26,7 @@ async def login_user(credentials: LoginCredentials):
         "District Collector/DM/SJO": "District_lvl_Officers",
         "Investigation Officer": "Vishesh_Thana_Officers",
         "PFMS Officer": "District_lvl_Officers",
+        "Special Officer": "District_lvl_Officers",
         "ADM": "District_lvl_Officers"
     }
     

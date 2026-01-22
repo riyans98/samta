@@ -9,48 +9,44 @@ from datetime import date, datetime
 
 # Which role can act at each stage
 STAGE_ALLOWED_ROLE: Dict[int, str] = {
-    1: "Tribal Officer",       # Verification Pending
-    2: "District Collector/DM/SJO",  # DM Approval Pending
-    3: "State Nodal Officer",  # SNO Fund Sanction Pending
-    4: "PFMS Officer",         # PFMS Fund Transfer Pending (first 25%)
-    5: "Investigation Officer", # Chargesheet Submission Pending
-    6: "PFMS Officer",         # Second Tranche Release (25-50%)
-    7: "District Collector/DM/SJO",  # Judgment Pending / Final Tranche
+    1: "Special Officer",         # Special Officer Approval (replaces TO, DM, SNO)
+    2: "PFMS Officer",            # PFMS Fund Transfer (first 25%)
+    3: "Investigation Officer",   # Chargesheet Submission
+    4: "PFMS Officer",            # Second Tranche Release (25-50%)
+    5: "District Collector/DM/SJO",  # Judgment Recording
+    6: "PFMS Officer",            # Final Tranche Release
 }
 
 # Where case goes after approval at each stage
 STAGE_NEXT_PENDING_AT: Dict[int, str] = {
-    1: "District Collector/DM/SJO",  # After TO approves → DM
-    2: "State Nodal Officer",  # After DM approves → SNO
-    3: "PFMS Officer",         # After SNO sanctions → PFMS
-    4: "Investigation Officer", # After first tranche → IO for chargesheet
-    5: "PFMS Officer",         # After chargesheet → PFMS for second tranche
-    6: "District Collector/DM/SJO",  # After second tranche → DM for judgment
-    7: "PFMS Officer",         # After judgment → PFMS for final tranche
+    1: "PFMS Officer",         # After Special Officer approves → PFMS for 1st tranche
+    2: "Investigation Officer", # After 1st tranche → IO for chargesheet
+    3: "PFMS Officer",         # After chargesheet → PFMS for 2nd tranche
+    4: "District Collector/DM/SJO",  # After 2nd tranche → DM for judgment
+    5: "PFMS Officer",         # After judgment → PFMS for final tranche
+    6: None,                   # After final tranche → Case closed
 }
 
 # Event type generated at each approval stage
 STAGE_APPROVAL_EVENT: Dict[int, str] = {
-    1: "TO_APPROVED",
-    2: "DM_APPROVED",
-    3: "SNO_APPROVED",
-    4: "PFMS_FIRST_TRANCHE",
-    5: "CHARGESHEET_SUBMITTED",
-    6: "PFMS_SECOND_TRANCHE",
-    7: "DM_JUDGMENT_RECORDED",
+    1: "SPECIAL_OFFICER_APPROVED",
+    2: "PFMS_FIRST_TRANCHE",
+    3: "CHARGESHEET_SUBMITTED",
+    4: "PFMS_SECOND_TRANCHE",
+    5: "DM_JUDGMENT_RECORDED",
+    6: "PFMS_FINAL_TRANCHE",
 }
 
 # Stage descriptions for reference
 STAGE_DESCRIPTIONS: Dict[int, str] = {
     0: "FIR Submitted (IO)",
-    1: "Verification Pending (Tribal Officer)",
-    2: "DM Approval Pending",
-    3: "SNO Approval Pending",
-    4: "First Tranche (25%) Pending",
-    5: "Chargesheet Pending",
-    6: "Second Tranche (25–50%) Pending",
-    7: "Judgment Pending / Final Tranche",
-    8: "Case Closed",
+    1: "Special Officer Approval Pending",
+    2: "First Tranche (25%) Pending (PFMS)",
+    3: "Chargesheet Pending (IO)",
+    4: "Second Tranche (25–50%) Pending (PFMS)",
+    5: "Judgment Pending (DM)",
+    6: "Final Tranche Pending (PFMS)",
+    7: "Case Closed",
 }
 
 

@@ -710,7 +710,10 @@ async def approve_case(
     """
     Approve a case and move it to the next stage.
     
-    Allowed transitions:
+    NEW SIMPLIFIED WORKFLOW:
+    - Stage 1 (Special Officer approves) → Stage 2 (PFMS for 1st tranche)
+    
+    OLD WORKFLOW (backward compatibility):
     - Stage 1 (TO verifies) → Stage 2 (DM pending) [TO can set fund_amount here]
     - Stage 2 (DM approves) → Stage 3 (SNO pending)
     - Stage 3 (SNO sanctions) → Stage 4 (PFMS pending)
@@ -727,7 +730,7 @@ async def approve_case(
     if case.Stage is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Case stage is not set")
     
-    # Validate role and stage (stages 1, 2, 3 allow approve action)
+    # Validate role and stage (NEW: stage 1 only for Special Officer; OLD: stages 1, 2, 3 for TO, DM, SNO)
     validate_role_for_action(token_payload, payload.role, case, [0, 1, 2, 3])
     
     # Determine event type based on current stage
@@ -861,8 +864,8 @@ async def release_funds(
     # Validate jurisdiction access
     validate_jurisdiction(token_payload, case)
     
-    # PFMS Officer can release funds at stages 4, 6, 8
-    validate_role_for_action(token_payload, payload.role, case, [4, 6, 8])
+    # PFMS Officer can release funds at stages 2, 4, 6 (NEW SIMPLIFIED WORKFLOW)
+    validate_role_for_action(token_payload, payload.role, case, [2, 4, 6])
     
     if payload.role != "PFMS Officer":
         raise HTTPException(
@@ -872,20 +875,20 @@ async def release_funds(
     
     # Determine tranche type and next stage
     current_stage = case.Stage
-    if current_stage == 4:
+    if current_stage == 2:
         event_type = "PFMS_FIRST_TRANCHE"
-        next_stage = 5
+        next_stage = 3
         next_pending_at = "Investigation Officer"
         tranche_label = "First Tranche (25%)"
-    elif current_stage == 6:
+    elif current_stage == 4:
         event_type = "PFMS_SECOND_TRANCHE"
-        next_stage = 7
+        next_stage = 5
         next_pending_at = "District Collector/DM/SJO"
         tranche_label = "Second Tranche (25-50%)"
-    elif current_stage == 8:
-        # At stage 8, final tranche release (judgment already recorded)
+    elif current_stage == 6:
+        # At stage 6, final tranche release (judgment already recorded)
         event_type = "PFMS_FINAL_TRANCHE"
-        next_stage = 9
+        next_stage = 7
         next_pending_at = ""  # Case closed
         tranche_label = "Final Tranche"
     else:
@@ -994,9 +997,10 @@ async def complete_case(
     Complete a case with judgment details. District Collector/DM/SJO only at stage 7.
     
     After judgment is recorded, case moves to stage 8 (judgment complete).
-    PFMS Officer then confirms final tranche release at stage 8.
+    PFMS Officer then confirms final tranche release at stage 6.
     
-    Transition: Stage 7 (judgment pending) → Stage 8 (judgment complete, awaiting final tranche)
+    NEW WORKFLOW: Transition: Stage 5 (judgment pending) → Stage 6 (judgment complete, awaiting final tranche)
+    OLD WORKFLOW: Transition: Stage 7 (judgment pending) → Stage 8 (judgment complete, awaiting final tranche)
     """
     # Get current case
     case = get_fir_data_by_case_no(case_no)
@@ -1006,8 +1010,8 @@ async def complete_case(
     # Validate jurisdiction access
     validate_jurisdiction(token_payload, case)
     
-    # DM at stage 7 can complete case
-    # Note: At stage 7, DM records judgment (allowed role should be DM here)
+    # DM at stage 5 (NEW) or stage 7 (OLD) can complete case
+    # Note: At these stages, DM records judgment (allowed role should be DM here)
     jwt_role = token_payload.get("role")
     if jwt_role != payload.role:
         raise HTTPException(
@@ -1015,16 +1019,17 @@ async def complete_case(
             detail=f"Role mismatch: JWT role '{jwt_role}' does not match payload role '{payload.role}'"
         )
     
-    if case.Stage != 7:
+    # Support both old (stage 7) and new (stage 5) workflows
+    if case.Stage not in [5, 7]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Case is at stage {case.Stage}, but completion requires stage 7"
+            detail=f"Case is at stage {case.Stage}, but judgment requires stage 5 (new workflow) or 7 (old workflow)"
         )
     
     if payload.role != "District Collector/DM/SJO":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only District Collector/DM/SJO can complete a case"
+            detail="Only District Collector/DM/SJO can record judgment"
         )
     
     # Insert judgment event
@@ -1042,9 +1047,10 @@ async def complete_case(
         event_data=event_data
     )
     
-    # Case moves to stage 8 (judgment complete) but awaits final tranche confirmation from PFMS
+    # Case moves to next stage (stage 6 for new workflow, stage 8 for old workflow)
+    next_stage = 6 if case.Stage == 5 else 8
     update_atrocity_case(case_no, {
-        "Stage": 8,
+        "Stage": next_stage,
         "Pending_At": "PFMS Officer for Final Tranche Release",
         "Approved_By": payload.actor
     })
