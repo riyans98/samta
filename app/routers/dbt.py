@@ -6,7 +6,7 @@ import base64
 from fastapi import APIRouter, HTTPException, Query, status, Depends, UploadFile, File, Form
 from typing import Dict, Any, Optional
 from pydantic import ValidationError, conint
-from app.db.govt_session import get_fir_by_number, get_aadhaar_by_number
+from app.db.govt_session import get_fir_by_number, get_aadhaar_by_number, get_atrocity_section_map
 from pydantic import BaseModel, ValidationError, conint
 from app.db.session import get_alert_details_by_id, insert_new_pending_alert 
 from app.core.config import settings
@@ -388,6 +388,16 @@ async def submit_fir_form(
     # NOTE: Bank Name and Branch Name are not in the ATROCITY table, 
     # they should be stored in a separate BANK_DETAILS table or a JSON/text field.
     # For simplicity, they are skipped for ATROCITY table insertion.
+
+    # --- 3.1 Set Allowance Fund as per Atrocity Sections ---
+    section_rules_map = get_atrocity_section_map()
+    allowable_fund = 0
+    for act in db_payload['Applied_Acts'].lower().split(","):
+        rule = section_rules_map.get(act.strip())
+        if rule:
+            allowable_fund += (rule.MinimumCompensation or 0)
+        
+    db_payload['Allowance_Fund'] = allowable_fund
 
     # --- 4. Check if FIR already exists (prevent duplicates) ---
     existing_case = get_fir_data_by_fir_no(firNumber)

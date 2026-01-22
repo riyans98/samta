@@ -459,3 +459,8 @@ def get_all_atrocity_sections() -> List[AtrocitySection]:
     finally:
         cursor.close()
         connection.close()
+
+def get_atrocity_section_map() -> Dict[str, AtrocitySection]:
+    """Fetch all atrocity sections and return a mapping from section code to AtrocitySection."""
+    sections = get_all_atrocity_sections()
+    return {section.Section: section for section in sections}
