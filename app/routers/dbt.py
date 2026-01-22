@@ -397,7 +397,7 @@ async def submit_fir_form(
         if rule:
             allowable_fund += (rule.MinimumCompensation or 0)
         
-    db_payload['Allowance_Fund'] = allowable_fund
+    db_payload['Fund_Ammount'] = allowable_fund
 
     # --- 4. Check if FIR already exists (prevent duplicates) ---
     existing_case = get_fir_data_by_fir_no(firNumber)
